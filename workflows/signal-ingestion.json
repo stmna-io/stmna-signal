@@ -1,0 +1,2043 @@
+{
+  "name": "Signal_Ingestion",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## INGESTION\n\nSignal polling (every 5s) + Webhook entry point.\nBoth paths normalize to unified message format.\n\nSchedule Trigger > Poll Signal > Filter Empty > Split > Normalize\nWebhook Trigger > Normalize",
+        "height": 500,
+        "width": 1300,
+        "color": 2
+      },
+      "name": "Section: INGESTION",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -96,
+        -96
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "content": "## COMMAND PARSER\n\nExtracts flags (quick, deep, help, etc.) and URL from message.\nRoutes help requests to Help Response.",
+        "height": 500,
+        "width": 500,
+        "color": 3
+      },
+      "name": "Section: COMMAND PARSER",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1408,
+        -96
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "content": "## IDENTITY & CONTENT KEY\n\nResolves sender identity via pipeline_users (UPSERT).\nNormalizes URL to content key for cache lookup.",
+        "height": 500,
+        "width": 700,
+        "color": 4
+      },
+      "name": "Section: IDENTITY",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        -96
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "content": "## CACHE CHECK & ROUTING\n\nChecks content_cache + content_variants for existing results.\nCache hit: serve immediately. Cache miss: queue job.",
+        "height": 700,
+        "width": 1200,
+        "color": 5
+      },
+      "name": "Section: CACHE & ROUTING",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2800,
+        -96
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "content": "## ERROR HANDLING\n\nCatches pipeline failures, formats user-friendly error message,\nsends back via Signal.",
+        "height": 300,
+        "width": 500,
+        "color": 6
+      },
+      "name": "Section: ERROR HANDLING",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2800,
+        800
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 5
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        208
+      ],
+      "notes": "Poll interval: 5 seconds.\n\nWHAT: Triggers Signal message polling on a fixed schedule.\nWHY: signal-cli-rest-api does not support push webhooks.\nHOW: Fires every 5s, triggers Poll Signal API.\nNEXT: Poll Signal API fetches pending messages.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "url": "http://YOUR_TAILSCALE_IP:8082/v1/receive/YOUR_PHONE_NUMBER",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Poll Signal API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        208
+      ],
+      "notes": "WHAT: Fetches pending messages from signal-cli REST API.\nWHY: Retrieves messages that arrived since last poll.\nHOW: GET /v1/receive/+NUMBER returns array of message envelopes.\nNEXT: Filter Empty skips processing when no messages.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.data }}",
+              "rightValue": "[]",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "name": "Filter Empty",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        400,
+        208
+      ],
+      "notes": "WHAT: Skips processing when Signal API returns empty array.\nWHY: Most polls return nothing -- avoid running pipeline on empty data.\nHOW: Checks if response data != '[]'.\nNEXT: True branch goes to Split Messages.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Split Messages",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        608,
+        208
+      ],
+      "notes": "WHAT: Processes Signal messages one at a time.\nWHY: Each message may be a different content type/command.\nHOW: Splits array into individual items.\nNEXT: Each item goes to Normalize Input.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "signal-pipeline",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "webhookId": "YOUR_UUID",
+      "notes": "WHAT: Receives direct HTTP POST requests (bookmarklet, shortcuts).\nWHY: Desktop entry point via browser bookmarklet.\nHOW: Listens at /webhook/signal-pipeline. Expects JSON: {url, flags, source}.\nNEXT: Normalize Input merges with Signal format.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// NORMALIZE INPUT -- Unified Message Format\n// Merges Signal messages and webhook payloads into one shape.\n// Signal poll returns: {data: \"[{envelope:{...}}]\"} -- data is a JSON STRING\n// IMPORTANT: Skips typing indicators, read receipts, and other non-message envelopes.\n// Output: {_source, _sender, _senderUuid, _message, _timestamp, _hasAttachment, _attachmentType, _pipeline_start_ms}\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  let json = item.json;\n\n  // ---- SIGNAL POLL FORMAT ----\n  // Poll Signal API returns {data: \"[{...}]\"} where data is a string\n  if (typeof json.data === 'string' && json.data.startsWith('[')) {\n    try {\n      const messages = JSON.parse(json.data);\n      for (const msg of messages) {\n        if (!msg.envelope) continue;\n        const env = msg.envelope;\n        const dm = env.dataMessage;\n\n        // Skip non-message envelopes: typing indicators, receipts, etc.\n        // Only process envelopes that have a dataMessage with actual content\n        if (!dm) continue;\n        if (!dm.message && !(dm.attachments && dm.attachments.length > 0)) continue;\n\n        const sender = env.sourceNumber || env.sourceName || '';\n        const senderUuid = env.sourceUuid || '';\n        const message = dm.message || '';\n        const timestamp = dm.timestamp || env.timestamp || Date.now();\n        let hasAttachment = false;\n        let attachmentType = '';\n        let attachmentId = '';\n        if (dm.attachments && dm.attachments.length > 0) {\n          hasAttachment = true;\n          attachmentType = dm.attachments[0].contentType || '';\n          attachmentId = dm.attachments[0].id || '';\n        }\n        results.push({\n          json: {\n            _source: 'signal',\n            _sender: sender,\n            _senderUuid: senderUuid,\n            _message: message.trim(),\n            _timestamp: timestamp,\n            _hasAttachment: hasAttachment,\n            _attachmentType: attachmentType,\n            _attachmentId: attachmentId,\n            _pipeline_start_ms: Date.now()\n          }\n        });\n      }\n    } catch (e) {\n      // JSON parse failed -- skip\n    }\n    continue;\n  }\n\n  // ---- SIGNAL DIRECT FORMAT ----\n  if (json.envelope) {\n    const dm = json.envelope.dataMessage;\n    if (!dm) continue; // skip typing indicators, receipts\n    if (!dm.message && !(dm.attachments && dm.attachments.length > 0)) continue;\n    const message = dm.message || '';\n    const sender = json.envelope.sourceNumber || json.envelope.sourceName || '';\n    const senderUuid = json.envelope.sourceUuid || '';\n    const timestamp = dm.timestamp || json.envelope.timestamp || Date.now();\n    let hasAttachment = false;\n    let attachmentType = '';\n    let attachmentId = '';\n    if (dm.attachments && dm.attachments.length > 0) {\n      hasAttachment = true;\n      attachmentType = dm.attachments[0].contentType || '';\n      attachmentId = dm.attachments[0].id || '';\n    }\n    results.push({\n      json: {\n        _source: 'signal',\n        _sender: sender,\n        _senderUuid: senderUuid,\n        _message: message.trim(),\n        _timestamp: timestamp,\n        _hasAttachment: hasAttachment,\n        _attachmentType: attachmentType,\n        _attachmentId: attachmentId,\n        _pipeline_start_ms: Date.now()\n      }\n    });\n    continue;\n  }\n\n  // ---- WEBHOOK FORMAT ----\n  if (json.body) {\n    const source = json.body.source || 'webhook';\n    let message = json.body.url || json.body.message || json.body.text || '';\n    if (json.body.flags) message = json.body.flags + ' ' + message;\n    const sender = json.body.sender || 'webhook';\n    const senderUuid = json.body.senderUuid || json.body.sender_uuid || 'YOUR_UUID';\n    results.push({\n      json: {\n        _source: source,\n        _sender: sender,\n        _senderUuid: senderUuid,\n        _message: message.trim(),\n        _timestamp: Date.now(),\n        _hasAttachment: false,\n        _attachmentType: '',\n        _attachmentId: '',\n        _pipeline_start_ms: Date.now()\n      }\n    });\n    continue;\n  }\n\n  // ---- DIRECT PARAMS ----\n  if (json.url || json.message) {\n    let message = json.url || json.message || json.text || '';\n    if (json.flags) message = json.flags + ' ' + message;\n    const directUuid = json.senderUuid || json.sender_uuid || 'YOUR_UUID';\n    results.push({\n      json: {\n        _source: json.source || 'webhook',\n        _sender: 'webhook',\n        _senderUuid: directUuid,\n        _message: message.trim(),\n        _timestamp: Date.now(),\n        _hasAttachment: false,\n        _attachmentType: '',\n        _attachmentId: '',\n        _pipeline_start_ms: Date.now()\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        208
+      ],
+      "notes": "WHAT: Merges Signal and webhook inputs into unified format.\nWHY: All downstream nodes work with one consistent shape.\nHOW: Detects source, extracts message text, sender, attachment info.\nNEXT: Command Parser extracts flags and URL from _message.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// COMMAND PARSER -- Extract flags + URL from message\n// All Phase 2 flags are parsed but currently no-op.\n\nconst item = $input.first().json;\nconst message = item._message || '';\n\nconst flags = {\n  tts: false, translate: null, deep: false,\n  quick: false, transcript_only: false,\n  braindump: false, book: false, help: false, dub: null\n};\n\nlet content = message;\n\nif (/\\bhelp\\b/i.test(content)) { flags.help = true; }\nif (/\\btts\\b/i.test(content)) { flags.tts = true; content = content.replace(/\\btts\\b/i, ''); }\nif (/\\btranslate\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.translate = content.match(/translate\\s+(en|fr|nl|de|es)/i)[1];\n  content = content.replace(/\\btranslate\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdub\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.dub = content.match(/dub\\s+(en|fr|nl|de|es)/i)[1];\n  content = content.replace(/\\bdub\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdeep\\b/i.test(content)) { flags.deep = true; content = content.replace(/\\bdeep\\b/i, ''); }\nif (/\\bquick\\b/i.test(content)) { flags.quick = true; content = content.replace(/\\bquick\\b/i, ''); }\nif (/\\btranscript\\b/i.test(content)) { flags.transcript_only = true; content = content.replace(/\\btranscript\\b/i, ''); }\nif (/\\bbraindump\\b/i.test(content)) { flags.braindump = true; content = content.replace(/\\bbraindump\\b/i, ''); }\nif (/\\bbook\\b/i.test(content)) { flags.book = true; content = content.replace(/\\bbook\\b/i, ''); }\n\nconst url = content.trim().match(/https?:\\/\\/\\S+/)?.[0] || null;\nconst text = url ? content.replace(url, '').trim() : content.trim();\n\nreturn [{ json: { ...item, _flags: flags, _url: url, _text: text, _hasAttachment: item._hasAttachment || false } }];"
+      },
+      "name": "Command Parser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        208
+      ],
+      "notes": "WHAT: Extracts command flags and URL from message text.\nWHY: Flags control pipeline behavior (quick, deep, help, etc.).\nHOW: Regex matching + text removal per PRD spec.\nNEXT: Help Check routes help; main pipeline continues if not help.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "help_cond",
+              "leftValue": "={{ $json._flags.help }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Help Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1800,
+        208
+      ],
+      "notes": "WHAT: Routes help requests to help response.\nHOW: Checks _flags.help boolean.\nNEXT: True -> Help Response. False -> Resolve Identity.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// HELP RESPONSE — Returns command list with Unicode bold headers\n\n// Unicode Bold converter (Mathematical Bold Sans-Serif)\nfunction toBold(text) {\n  const boldMap = {};\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D5D4 + i);\n  }\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D5EE + i);\n  }\n  for (let i = 0; i < 10; i++) {\n    boldMap[String.fromCharCode(48 + i)] = String.fromCodePoint(0x1D7EC + i);\n  }\n  return text.split('').map(c => boldMap[c] || c).join('');\n}\n\nconst helpText = [\n  toBold('Welcome to STMNA Signal!'),\n  '',\n  'Send any YouTube, web page, link to PDF or post on X and get summarized content back!',\n  '',\n  'Jobs are processed at night and results will be shared with you next day at 08:00AM.',\n  '',\n  toBold('Bot Commands:'),\n  '',\n  '(no flag) - Full summary + vault save',\n  'quick - Fast summary, Signal only (no vault)',\n  'deep - Extended detailed analysis',\n  'help - This command list',\n  '',\n  toBold('Coming soon:'),\n  '',\n  'transcript - Transcription only',\n  'braindump - Structure text to vault',\n  'tts - Audio version of summary',\n  'translate [lang] - Translate summary',\n  'dub [lang] - Dubbed video',\n  '',\n  toBold('Examples:'),\n  'https://youtube.com/watch?v=abc',\n  'quick https://article.com/post',\n  'deep https://github.com/user/repo'\n].join('\\n');\n\nreturn [{ json: { ...$input.first().json, _response: helpText, _skipVault: true } }];"
+      },
+      "name": "Help Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        0
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Send Help",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        0
+      ],
+      "notes": "WHAT: Sends help text back to the sender via Signal API.\nWHY: User requested help command.\nHOW: POST to Signal v2/send with dynamic recipient UUID.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO pipeline_users (name, role, signal_uuid) VALUES ('Unknown', 'user', '{{ $('Command Parser').first().json._senderUuid }}') ON CONFLICT (signal_uuid) DO UPDATE SET name = pipeline_users.name RETURNING id, name, role;",
+        "options": {}
+      },
+      "name": "Resolve Identity",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2100,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_POSTGRES_CREDENTIAL"
+        }
+      },
+      "notes": "WHAT: Looks up or creates the sender in pipeline_users.\nWHY: Every message needs a resolved user identity for role-based routing.\nHOW: UPSERT -- inserts new user as role='user' if not found, returns existing if found.\n     Uses ON CONFLICT (signal_uuid) DO UPDATE to always return a row.\nNEXT: Normalize Content Key extracts cache key from URL.",
+      "onError": "continueErrorOutput",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// NORMALIZE CONTENT KEY\n// Extracts a stable, cache-friendly key from the URL.\n// YouTube: video ID (11 chars). Web: cleaned URL without tracking params.\n// Also determines _contentType for downstream routing.\n// UPDATED: Phase 1D — Added X/Twitter, GitHub, PDF, Spotify, Tidal detection\n//          + braindump/voice-note detection for no-URL messages\n\nconst item = $('Command Parser').first().json;\nconst url = item._url || '';\n\n// Attach identity from the Resolve Identity node\nconst identityData = $('Resolve Identity').first().json;\nconst userId = identityData?.id || null;\nconst userRole = identityData?.role || 'user';\nconst userName = identityData?.name || 'Unknown';\n\nlet contentKey = '';\nlet contentType = '';\n\nif (!url) {\n  // No URL — check for voice note attachment or braindump text\n  const isVoiceNote = item._hasAttachment && (item._attachmentType || '').startsWith('audio/');\n  const isBraindump = (item._flags?.braindump === true) || (!isVoiceNote && item._text && item._text.length > 0);\n\n  return [{ json: {\n    ...item,\n    _userId: userId,\n    _userRole: userRole,\n    _userName: userName,\n    _contentKey: '',\n    _contentType: isVoiceNote ? 'voice-note' : (isBraindump ? 'braindump' : 'none')\n  }}];\n}\n\n// ---- YOUTUBE ----\nconst ytPatterns = [\n  /(?:youtube\\.com\\/watch\\?.*v=)([a-zA-Z0-9_-]{11})/,\n  /(?:youtu\\.be\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/live\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]{11})/\n];\nfor (const pattern of ytPatterns) {\n  const match = url.match(pattern);\n  if (match) {\n    contentKey = `yt:${match[1]}`;\n    contentType = 'youtube';\n    break;\n  }\n}\n\n// ---- X/TWITTER ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(x\\.com|twitter\\.com)\\//i.test(url)) {\n  contentType = 'x-post';\n}\n\n// ---- GITHUB/GITLAB ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(github\\.com|gitlab\\.com)\\//i.test(url)) {\n  contentType = 'github';\n}\n\n// ---- PDF (URL ending in .pdf) ----\nif (!contentType && /\\.pdf(\\?|#|$)/i.test(url)) {\n  contentType = 'paper';\n}\n\n// ---- SPOTIFY ----\nif (!contentType && /^https?:\\/\\/open\\.spotify\\.com\\//i.test(url)) {\n  contentType = 'spotify';\n}\n\n// ---- TIDAL ----\nif (!contentType && /^https?:\\/\\/(www\\.)?tidal\\.com\\//i.test(url)) {\n  contentType = 'tidal';\n}\n\n// ---- WEB (fallback) ----\nif (!contentType) {\n  contentType = 'web';\n}\n\n// Build content key for all URL-based types (except YouTube, already set above)\nif (!contentKey) {\n  try {\n    const parsed = new URL(url);\n    const trackingParams = [\n      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',\n      'fbclid', 'gclid', 'ref', 'ref_src', 'ref_url',\n      'mc_cid', 'mc_eid', 's', 'si'\n    ];\n    for (const param of trackingParams) {\n      parsed.searchParams.delete(param);\n    }\n    const hostPath = parsed.hostname.toLowerCase() + parsed.pathname.replace(/\\/$/, '');\n    const query = parsed.searchParams.toString() ? '?' + parsed.searchParams.toString() : '';\n    const hash = parsed.hash || '';\n    contentKey = `web:${hostPath}${query}${hash}`;\n  } catch (e) {\n    contentKey = `web:${url.replace(/^https?:\\/\\//, '').replace(/\\/$/, '')}`;\n  }\n}\n\nreturn [{ json: {\n  ...item,\n  _userId: userId,\n  _userRole: userRole,\n  _userName: userName,\n  _contentKey: contentKey,\n  _contentType: contentType\n}}];\n"
+      },
+      "name": "Normalize Content Key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        304
+      ],
+      "notes": "WHAT: Extracts a stable content key from the URL for cache lookups.\nWHY: Same content shared by different users should hit the same cache entry.\nHOW: YouTube -> 'yt:<video_id>'. Web -> 'web:<cleaned_url>' (tracking params stripped).\n     Also attaches resolved identity (_userId, _userRole, _userName).\nNEXT: Cache Check queries PostgreSQL for existing results.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "url_cond",
+              "leftValue": "={{ $json._url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2800,
+        304
+      ],
+      "notes": "WHAT: Checks if the message contains a URL.\nWHY: Messages without URLs (braindumps, text) don't need cache lookup or queuing.\nHOW: Checks _url is not null/empty.\nNEXT: True -> Cache Check. False -> dropped (no action for text-only in this workflow).",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cc.content_key, cc.content_type, cc.title, cc.source_url, cc.transcript_path, cc.vault_path, cc.processed_at, cc.processed_by, cv.result AS _cachedSummary, cv.variant_type AS _cachedVariant FROM content_cache cc LEFT JOIN content_variants cv ON cc.content_key = cv.content_key AND cv.variant_type = 'summary' WHERE cc.content_key = '{{ $('Normalize Content Key').first().json._contentKey }}' LIMIT 1;",
+        "options": {}
+      },
+      "name": "Cache Check",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3200,
+        304
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_POSTGRES_CREDENTIAL"
+        }
+      },
+      "notes": "WHAT: Queries content_cache + content_variants for existing processed results.\nWHY: Avoid re-processing content that was already summarized.\nHOW: JOINs cache with summary variant on content_key.\nNEXT: Has Cache? routes to serve cached result or queue new job.",
+      "id": "YOUR_UUID",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// CHECK CACHE HIT — Routes based on Cache Check PostgreSQL result\n// The Cache Check node returns the cached row if found, empty object if not.\n// We check if content_key exists and is non-empty.\nconst cacheResult = $input.first().json;\nconst hasCacheHit = !!(cacheResult && cacheResult.content_key && cacheResult.content_key.length > 0);\n\nreturn [{ json: { ...cacheResult, _hasCacheHit: hasCacheHit } }];"
+      },
+      "name": "Check Cache Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3400,
+        304
+      ],
+      "notes": "Checks if Cache Check returned a cached row. Sets _hasCacheHit flag.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// SERVE CACHED RESULT\n// Formats the cached summary for Signal delivery.\n// Admin gets truncated summary + Forgejo link.\n// Regular user gets full summary text.\n\nconst item = $('Normalize Content Key').first().json;\nconst cacheData = $('Cache Check').first().json;\nconst userRole = item._userRole || 'user';\nconst summary = cacheData._cachedSummary || 'No summary available.';\nconst vaultPath = cacheData.vault_path || '';\nconst title = cacheData.title || 'Untitled';\nconst sourceUrl = cacheData.source_url || item._url || '';\n\n// Admin UUID for comparison\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || userRole === 'admin');\n\nlet response = '';\n\nif (isAdmin) {\n  // Admin: truncated summary (~1800 chars) + Forgejo vault link\n  const MAX_LEN = 1800;\n  const truncated = summary.length > MAX_LEN\n    ? summary.substring(0, MAX_LEN) + '\\n\\n[... truncated]'\n    : summary;\n\n  response = `\\u2705 [CACHED] ${title}\\n\\n${truncated}`;\n\n  if (vaultPath) {\n    const forgejoBase = 'https://YOUR_FORGEJO_DOMAIN/STMNA/second-brain/src/branch/main/';\n    response += `\\n\\n\\ud83d\\udcc1 Vault: ${forgejoBase}${encodeURI(vaultPath)}`;\n  }\n\n  if (sourceUrl) {\n    response += `\\n\\n\\ud83d\\udd17 Source: ${sourceUrl}`;\n  }\n} else {\n  // Regular user: full summary\n  response = `\\u2705 ${title}\\n\\n${summary}`;\n\n  if (sourceUrl) {\n    response += `\\n\\n\\ud83d\\udd17 Source: ${sourceUrl}`;\n  }\n}\n\n// Check if admin and no vault_path -- queue a vault write job\nlet needsVaultWrite = false;\nif (isAdmin && !vaultPath) {\n  needsVaultWrite = true;\n}\n\nreturn [{ json: {\n  ...item,\n  _response: response,\n  _cached: true,\n  _needsVaultWrite: needsVaultWrite,\n  _cachedTitle: title,\n  _cachedSummary: summary\n}}];"
+      },
+      "name": "Serve Cached",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3800,
+        208
+      ],
+      "notes": "WHAT: Formats cached summary for Signal response.\nWHY: Avoid re-processing -- serve from cache immediately.\nHOW: Admin gets truncated summary + Forgejo link. User gets full text.\n     If admin and no vault_path, flags for vault write job.\nNEXT: Send Cache Response delivers via Signal API.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Send Cache Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4100,
+        208
+      ],
+      "notes": "WHAT: Sends cached result back to sender via Signal API.\nWHY: Deliver the cached summary immediately.\nHOW: POST to Signal v2/send with dynamic recipient UUID.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ (() => {\n  const nck = $('Normalize Content Key').first().json;\n  const isAdmin = (nck._senderUuid === 'YOUR_UUID' || nck._userRole === 'admin');\n  const priority = isAdmin ? 'immediate' : 'scheduled';\n  const scheduledAfter = isAdmin ? 'NULL' : \"(CURRENT_DATE + INTERVAL '1 day' + INTERVAL '4 hours')\";\n  const flagsJson = JSON.stringify(nck._flags || {}).replace(/'/g, \"''\");\n  const url = (nck._url || '').replace(/'/g, \"''\");\n  const ct = nck._contentType || 'web';\n  const src = nck._source || 'signal';\n  const msg = (nck._message || '').replace(/'/g, \"''\");\n  const userId = nck._userId || 1;\n  return `INSERT INTO pipeline_queue (url, content_type, flags, sender, source_channel, message_text, priority, scheduled_after, status) VALUES ('${url}', '${ct}', '${flagsJson}', ${userId}, '${src}', '${msg}', '${priority}', ${scheduledAfter}, 'pending') RETURNING id, priority, scheduled_after;`;\n})() }}",
+        "options": {}
+      },
+      "name": "Queue Job",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3800,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_POSTGRES_CREDENTIAL"
+        }
+      },
+      "notes": "WHAT: Inserts a new processing job into pipeline_queue.\nWHY: Content not in cache -- needs to be processed by the Processing workflow.\nHOW: Admin jobs get priority='immediate'. User jobs get priority='scheduled' (next 4 AM).\nNEXT: Send Ack notifies the sender that their request is queued.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// SEND ACK — Acknowledges queued job to sender\n// Admin: \"Getting details on [link]\"\n// User: \"Getting details on [link] + ready tomorrow morning\"\n\nconst item = $('Normalize Content Key').first().json;\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\nconst url = item._url || '';\n\nlet response = '';\n\nif (isAdmin) {\n  response = `\\ud83d\\udd0d Getting details on ${url}`;\n} else {\n  response = `\\ud83d\\udd0d Getting details on ${url}\\n\\nReady for you tomorrow first thing in the morning!`;\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+      },
+      "name": "Send Ack",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4100,
+        500
+      ],
+      "notes": "WHAT: Builds acknowledgment message for the sender.\nWHY: User should know their request was received and when to expect results.\nHOW: Admin sees 'Processing...' + job ID. User sees 'Queued for 4 AM'.\nNEXT: Send Ack Message delivers via Signal API.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Send Ack Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4400,
+        500
+      ],
+      "notes": "WHAT: Sends queue acknowledgment back to sender via Signal API.\nWHY: Immediate feedback that the request was received.\nHOW: POST to Signal v2/send with dynamic recipient UUID.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ERROR HANDLER -- Formats user-friendly error messages\nconst item = $input.first().json;\nconst errorMsg = item.error?.message || item.message || 'Unknown error occurred';\nconst nodeName = item.error?.node || 'Unknown node';\n\n// Build user-friendly error message\nconst response = [\n  'Error processing your content:',\n  '',\n  errorMsg.substring(0, 500),\n  '',\n  `Failed at: ${nodeName}`,\n  '',\n  'Tips:',\n  '- Check if the URL is accessible',\n  '- YouTube: verify video is not private/age-restricted',\n  '- Web: some sites block scraping',\n  '- Try again in a few minutes',\n].join('\\n');\n\nreturn [{ json: { ...(item._senderUuid ? item : {}), _response: response, _error: true, _senderUuid: item._senderUuid || 'YOUR_UUID' } }];"
+      },
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        900
+      ],
+      "notes": "WHAT: Catches pipeline failures, formats user-friendly error.\nWHY: User should get informative feedback, not raw stack traces.\nHOW: Extracts error message, adds troubleshooting tips.\nNEXT: Send Error Msg sends error back via Signal.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Send Error Msg",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3200,
+        900
+      ],
+      "notes": "WHAT: Sends error message back to user via Signal.",
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cache_hit_cond",
+              "leftValue": "={{ $json._hasCacheHit }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Cache?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3600,
+        304
+      ],
+      "id": "has-cache-if-new"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "not_spotify",
+              "leftValue": "={{ $json._contentType }}",
+              "rightValue": "spotify",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "not_tidal",
+              "leftValue": "={{ $json._contentType }}",
+              "rightValue": "tidal",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "not_none_text",
+              "leftValue": "={{ $json._contentType }}",
+              "rightValue": "none",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Supported Type?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2550,
+        304
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// UNSUPPORTED RESPONSE — Spotify/Tidal \"coming soon\" + empty message handling\nconst item = $input.first().json;\nconst ct = item._contentType || 'none';\n\nlet response = '';\nif (ct === 'spotify') {\n  response = '\\u{1F3B5} Spotify support coming soon! For now, share the YouTube link if available.';\n} else if (ct === 'tidal') {\n  response = '\\u{1F3B5} Tidal support coming soon! For now, share the YouTube link if available.';\n} else {\n  // _contentType === 'none' — no URL, no text, no attachment\n  response = \"I didn't catch that. Send me a URL, a voice note, or text with the braindump flag.\\n\\nSend help for available commands.\";\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+      },
+      "name": "Unsupported Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2750,
+        600
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Send Unsupported Msg",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3050,
+        600
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ (() => {\n  const nck = $('Normalize Content Key').first().json;\n  const isAdmin = (nck._senderUuid === 'YOUR_UUID' || nck._userRole === 'admin');\n  const priority = isAdmin ? 'immediate' : 'scheduled';\n  const scheduledAfter = isAdmin ? 'NULL' : \"(CURRENT_DATE + INTERVAL '1 day' + INTERVAL '4 hours')\";\n  const flagsJson = JSON.stringify(nck._flags || {}).replace(/'/g, \"''\");\n  const ct = nck._contentType || 'braindump';\n  const src = nck._source || 'signal';\n  const userId = nck._userId || 1;\n  // For voice notes: store attachment metadata as JSON in message_text\n  // so the Worker's Download Attachment node can retrieve the file\n  let msg;\n  if (ct === 'voice-note' && nck._attachmentId) {\n    msg = JSON.stringify({\n      attachmentId: nck._attachmentId,\n      attachmentType: nck._attachmentType || 'audio/ogg',\n      originalMessage: nck._message || ''\n    }).replace(/'/g, \"''\");\n  } else {\n    msg = (nck._message || '').replace(/'/g, \"''\");\n  }\n  return `INSERT INTO pipeline_queue (url, content_type, flags, sender, source_channel, message_text, priority, scheduled_after, status) VALUES ('', '${ct}', '${flagsJson}', ${userId}, '${src}', '${msg}', '${priority}', ${scheduledAfter}, 'pending') RETURNING id, priority, scheduled_after;`;\n})() }}",
+        "options": {}
+      },
+      "name": "Queue Braindump",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2950,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_POSTGRES_CREDENTIAL"
+        }
+      },
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// BRAINDUMP/VOICE ACK — Acknowledge queued braindump or voice note\nconst item = $('Normalize Content Key').first().json;\nconst ct = item._contentType || 'braindump';\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\n\nlet response = '';\nif (ct === 'voice-note') {\n  response = '\\u{1F3A4} Transcribing your voice note...';\n} else {\n  response = '\\u{1F4DD} Structuring your braindump...';\n}\n\nif (!isAdmin) {\n  response += '\\n\\nReady for you tomorrow first thing in the morning!';\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+      },
+      "name": "Braindump Ack",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3250,
+        100
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Send Braindump Ack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3550,
+        100
+      ],
+      "id": "YOUR_UUID"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Poll Signal API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Signal API": {
+      "main": [
+        [
+          {
+            "node": "Filter Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Empty": {
+      "main": [
+        [
+          {
+            "node": "Split Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Split Messages": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Command Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Command Parser": {
+      "main": [
+        [
+          {
+            "node": "Help Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Help Check": {
+      "main": [
+        [
+          {
+            "node": "Help Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Identity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Help Response": {
+      "main": [
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Identity": {
+      "main": [
+        [
+          {
+            "node": "Normalize Content Key",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Content Key": {
+      "main": [
+        [
+          {
+            "node": "Supported Type?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has URL?": {
+      "main": [
+        [
+          {
+            "node": "Cache Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Queue Braindump",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cache Check": {
+      "main": [
+        [
+          {
+            "node": "Check Cache Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Cache?": {
+      "main": [
+        [
+          {
+            "node": "Serve Cached",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Queue Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serve Cached": {
+      "main": [
+        [
+          {
+            "node": "Send Cache Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Queue Job": {
+      "main": [
+        [
+          {
+            "node": "Send Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Ack": {
+      "main": [
+        [
+          {
+            "node": "Send Ack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Send Error Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Cache Result": {
+      "main": [
+        [
+          {
+            "node": "Has Cache?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supported Type?": {
+      "main": [
+        [
+          {
+            "node": "Has URL?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported Response": {
+      "main": [
+        [
+          {
+            "node": "Send Unsupported Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Queue Braindump": {
+      "main": [
+        [
+          {
+            "node": "Braindump Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Braindump Ack": {
+      "main": [
+        [
+          {
+            "node": "Send Braindump Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {
+    "node:Schedule Trigger": {
+      "recurrenceRules": []
+    }
+  },
+  "pinData": null,
+  "activeVersionId": "YOUR_UUID",
+  "versionCounter": 88,
+  "triggerCount": 2,
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-02-22T17:59:29.118Z",
+    "createdAt": "2026-02-22T17:59:29.118Z",
+    "versionId": "YOUR_UUID",
+    "workflowId": "G8P8MN81WrYqmhqB",
+    "nodes": [
+      {
+        "parameters": {
+          "content": "## INGESTION\n\nSignal polling (every 5s) + Webhook entry point.\nBoth paths normalize to unified message format.\n\nSchedule Trigger > Poll Signal > Filter Empty > Split > Normalize\nWebhook Trigger > Normalize",
+          "height": 500,
+          "width": 1300,
+          "color": 2
+        },
+        "name": "Section: INGESTION",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -96,
+          -96
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "content": "## COMMAND PARSER\n\nExtracts flags (quick, deep, help, etc.) and URL from message.\nRoutes help requests to Help Response.",
+          "height": 500,
+          "width": 500,
+          "color": 3
+        },
+        "name": "Section: COMMAND PARSER",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          1408,
+          -96
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "content": "## IDENTITY & CONTENT KEY\n\nResolves sender identity via pipeline_users (UPSERT).\nNormalizes URL to content key for cache lookup.",
+          "height": 500,
+          "width": 700,
+          "color": 4
+        },
+        "name": "Section: IDENTITY",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          2000,
+          -96
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "content": "## CACHE CHECK & ROUTING\n\nChecks content_cache + content_variants for existing results.\nCache hit: serve immediately. Cache miss: queue job.",
+          "height": 700,
+          "width": 1200,
+          "color": 5
+        },
+        "name": "Section: CACHE & ROUTING",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          2800,
+          -96
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "content": "## ERROR HANDLING\n\nCatches pipeline failures, formats user-friendly error message,\nsends back via Signal.",
+          "height": 300,
+          "width": 500,
+          "color": 6
+        },
+        "name": "Section: ERROR HANDLING",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          2800,
+          800
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "seconds",
+                "secondsInterval": 5
+              }
+            ]
+          }
+        },
+        "name": "Schedule Trigger",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          208
+        ],
+        "notes": "Poll interval: 5 seconds.\n\nWHAT: Triggers Signal message polling on a fixed schedule.\nWHY: signal-cli-rest-api does not support push webhooks.\nHOW: Fires every 5s, triggers Poll Signal API.\nNEXT: Poll Signal API fetches pending messages.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "url": "http://YOUR_TAILSCALE_IP:8082/v1/receive/YOUR_PHONE_NUMBER",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "name": "Poll Signal API",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          208,
+          208
+        ],
+        "notes": "WHAT: Fetches pending messages from signal-cli REST API.\nWHY: Retrieves messages that arrived since last poll.\nHOW: GET /v1/receive/+NUMBER returns array of message envelopes.\nNEXT: Filter Empty skips processing when no messages.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "cond1",
+                "leftValue": "={{ $json.data }}",
+                "rightValue": "[]",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "name": "Filter Empty",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          400,
+          208
+        ],
+        "notes": "WHAT: Skips processing when Signal API returns empty array.\nWHY: Most polls return nothing -- avoid running pipeline on empty data.\nHOW: Checks if response data != '[]'.\nNEXT: True branch goes to Split Messages.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "name": "Split Messages",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          608,
+          208
+        ],
+        "notes": "WHAT: Processes Signal messages one at a time.\nWHY: Each message may be a different content type/command.\nHOW: Splits array into individual items.\nNEXT: Each item goes to Normalize Input.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "signal-pipeline",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "name": "Webhook Trigger",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          800,
+          0
+        ],
+        "webhookId": "YOUR_UUID",
+        "notes": "WHAT: Receives direct HTTP POST requests (bookmarklet, shortcuts).\nWHY: Desktop entry point via browser bookmarklet.\nHOW: Listens at /webhook/signal-pipeline. Expects JSON: {url, flags, source}.\nNEXT: Normalize Input merges with Signal format.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// NORMALIZE INPUT -- Unified Message Format\n// Merges Signal messages and webhook payloads into one shape.\n// Signal poll returns: {data: \"[{envelope:{...}}]\"} -- data is a JSON STRING\n// IMPORTANT: Skips typing indicators, read receipts, and other non-message envelopes.\n// Output: {_source, _sender, _senderUuid, _message, _timestamp, _hasAttachment, _attachmentType, _pipeline_start_ms}\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  let json = item.json;\n\n  // ---- SIGNAL POLL FORMAT ----\n  // Poll Signal API returns {data: \"[{...}]\"} where data is a string\n  if (typeof json.data === 'string' && json.data.startsWith('[')) {\n    try {\n      const messages = JSON.parse(json.data);\n      for (const msg of messages) {\n        if (!msg.envelope) continue;\n        const env = msg.envelope;\n        const dm = env.dataMessage;\n\n        // Skip non-message envelopes: typing indicators, receipts, etc.\n        // Only process envelopes that have a dataMessage with actual content\n        if (!dm) continue;\n        if (!dm.message && !(dm.attachments && dm.attachments.length > 0)) continue;\n\n        const sender = env.sourceNumber || env.sourceName || '';\n        const senderUuid = env.sourceUuid || '';\n        const message = dm.message || '';\n        const timestamp = dm.timestamp || env.timestamp || Date.now();\n        let hasAttachment = false;\n        let attachmentType = '';\n        let attachmentId = '';\n        if (dm.attachments && dm.attachments.length > 0) {\n          hasAttachment = true;\n          attachmentType = dm.attachments[0].contentType || '';\n          attachmentId = dm.attachments[0].id || '';\n        }\n        results.push({\n          json: {\n            _source: 'signal',\n            _sender: sender,\n            _senderUuid: senderUuid,\n            _message: message.trim(),\n            _timestamp: timestamp,\n            _hasAttachment: hasAttachment,\n            _attachmentType: attachmentType,\n            _attachmentId: attachmentId,\n            _pipeline_start_ms: Date.now()\n          }\n        });\n      }\n    } catch (e) {\n      // JSON parse failed -- skip\n    }\n    continue;\n  }\n\n  // ---- SIGNAL DIRECT FORMAT ----\n  if (json.envelope) {\n    const dm = json.envelope.dataMessage;\n    if (!dm) continue; // skip typing indicators, receipts\n    if (!dm.message && !(dm.attachments && dm.attachments.length > 0)) continue;\n    const message = dm.message || '';\n    const sender = json.envelope.sourceNumber || json.envelope.sourceName || '';\n    const senderUuid = json.envelope.sourceUuid || '';\n    const timestamp = dm.timestamp || json.envelope.timestamp || Date.now();\n    let hasAttachment = false;\n    let attachmentType = '';\n    let attachmentId = '';\n    if (dm.attachments && dm.attachments.length > 0) {\n      hasAttachment = true;\n      attachmentType = dm.attachments[0].contentType || '';\n      attachmentId = dm.attachments[0].id || '';\n    }\n    results.push({\n      json: {\n        _source: 'signal',\n        _sender: sender,\n        _senderUuid: senderUuid,\n        _message: message.trim(),\n        _timestamp: timestamp,\n        _hasAttachment: hasAttachment,\n        _attachmentType: attachmentType,\n        _attachmentId: attachmentId,\n        _pipeline_start_ms: Date.now()\n      }\n    });\n    continue;\n  }\n\n  // ---- WEBHOOK FORMAT ----\n  if (json.body) {\n    const source = json.body.source || 'webhook';\n    let message = json.body.url || json.body.message || json.body.text || '';\n    if (json.body.flags) message = json.body.flags + ' ' + message;\n    const sender = json.body.sender || 'webhook';\n    const senderUuid = json.body.senderUuid || json.body.sender_uuid || 'YOUR_UUID';\n    results.push({\n      json: {\n        _source: source,\n        _sender: sender,\n        _senderUuid: senderUuid,\n        _message: message.trim(),\n        _timestamp: Date.now(),\n        _hasAttachment: false,\n        _attachmentType: '',\n        _attachmentId: '',\n        _pipeline_start_ms: Date.now()\n      }\n    });\n    continue;\n  }\n\n  // ---- DIRECT PARAMS ----\n  if (json.url || json.message) {\n    let message = json.url || json.message || json.text || '';\n    if (json.flags) message = json.flags + ' ' + message;\n    const directUuid = json.senderUuid || json.sender_uuid || 'YOUR_UUID';\n    results.push({\n      json: {\n        _source: json.source || 'webhook',\n        _sender: 'webhook',\n        _senderUuid: directUuid,\n        _message: message.trim(),\n        _timestamp: Date.now(),\n        _hasAttachment: false,\n        _attachmentType: '',\n        _attachmentId: '',\n        _pipeline_start_ms: Date.now()\n      }\n    });\n  }\n}\n\nreturn results;"
+        },
+        "name": "Normalize Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1104,
+          208
+        ],
+        "notes": "WHAT: Merges Signal and webhook inputs into unified format.\nWHY: All downstream nodes work with one consistent shape.\nHOW: Detects source, extracts message text, sender, attachment info.\nNEXT: Command Parser extracts flags and URL from _message.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// COMMAND PARSER -- Extract flags + URL from message\n// All Phase 2 flags are parsed but currently no-op.\n\nconst item = $input.first().json;\nconst message = item._message || '';\n\nconst flags = {\n  tts: false, translate: null, deep: false,\n  quick: false, transcript_only: false,\n  braindump: false, book: false, help: false, dub: null\n};\n\nlet content = message;\n\nif (/\\bhelp\\b/i.test(content)) { flags.help = true; }\nif (/\\btts\\b/i.test(content)) { flags.tts = true; content = content.replace(/\\btts\\b/i, ''); }\nif (/\\btranslate\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.translate = content.match(/translate\\s+(en|fr|nl|de|es)/i)[1];\n  content = content.replace(/\\btranslate\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdub\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.dub = content.match(/dub\\s+(en|fr|nl|de|es)/i)[1];\n  content = content.replace(/\\bdub\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdeep\\b/i.test(content)) { flags.deep = true; content = content.replace(/\\bdeep\\b/i, ''); }\nif (/\\bquick\\b/i.test(content)) { flags.quick = true; content = content.replace(/\\bquick\\b/i, ''); }\nif (/\\btranscript\\b/i.test(content)) { flags.transcript_only = true; content = content.replace(/\\btranscript\\b/i, ''); }\nif (/\\bbraindump\\b/i.test(content)) { flags.braindump = true; content = content.replace(/\\bbraindump\\b/i, ''); }\nif (/\\bbook\\b/i.test(content)) { flags.book = true; content = content.replace(/\\bbook\\b/i, ''); }\n\nconst url = content.trim().match(/https?:\\/\\/\\S+/)?.[0] || null;\nconst text = url ? content.replace(url, '').trim() : content.trim();\n\nreturn [{ json: { ...item, _flags: flags, _url: url, _text: text, _hasAttachment: item._hasAttachment || false } }];"
+        },
+        "name": "Command Parser",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1504,
+          208
+        ],
+        "notes": "WHAT: Extracts command flags and URL from message text.\nWHY: Flags control pipeline behavior (quick, deep, help, etc.).\nHOW: Regex matching + text removal per PRD spec.\nNEXT: Help Check routes help; main pipeline continues if not help.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "help_cond",
+                "leftValue": "={{ $json._flags.help }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Help Check",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          1800,
+          208
+        ],
+        "notes": "WHAT: Routes help requests to help response.\nHOW: Checks _flags.help boolean.\nNEXT: True -> Help Response. False -> Resolve Identity.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// HELP RESPONSE — Returns command list with Unicode bold headers\n\n// Unicode Bold converter (Mathematical Bold Sans-Serif)\nfunction toBold(text) {\n  const boldMap = {};\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D5D4 + i);\n  }\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D5EE + i);\n  }\n  for (let i = 0; i < 10; i++) {\n    boldMap[String.fromCharCode(48 + i)] = String.fromCodePoint(0x1D7EC + i);\n  }\n  return text.split('').map(c => boldMap[c] || c).join('');\n}\n\nconst helpText = [\n  toBold('Welcome to STMNA Signal!'),\n  '',\n  'Send any YouTube, web page, link to PDF or post on X and get summarized content back!',\n  '',\n  'Jobs are processed at night and results will be shared with you next day at 08:00AM.',\n  '',\n  toBold('Bot Commands:'),\n  '',\n  '(no flag) - Full summary + vault save',\n  'quick - Fast summary, Signal only (no vault)',\n  'deep - Extended detailed analysis',\n  'help - This command list',\n  '',\n  toBold('Coming soon:'),\n  '',\n  'transcript - Transcription only',\n  'braindump - Structure text to vault',\n  'tts - Audio version of summary',\n  'translate [lang] - Translate summary',\n  'dub [lang] - Dubbed video',\n  '',\n  toBold('Examples:'),\n  'https://youtube.com/watch?v=abc',\n  'quick https://article.com/post',\n  'deep https://github.com/user/repo'\n].join('\\n');\n\nreturn [{ json: { ...$input.first().json, _response: helpText, _skipVault: true } }];"
+        },
+        "name": "Help Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2100,
+          0
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "name": "Send Help",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2400,
+          0
+        ],
+        "notes": "WHAT: Sends help text back to the sender via Signal API.\nWHY: User requested help command.\nHOW: POST to Signal v2/send with dynamic recipient UUID.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO pipeline_users (name, role, signal_uuid) VALUES ('Unknown', 'user', '{{ $('Command Parser').first().json._senderUuid }}') ON CONFLICT (signal_uuid) DO UPDATE SET name = pipeline_users.name RETURNING id, name, role;",
+          "options": {}
+        },
+        "name": "Resolve Identity",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          2100,
+          304
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "PctDF92gLPazUEUV",
+            "name": "Postgres Signal"
+          }
+        },
+        "notes": "WHAT: Looks up or creates the sender in pipeline_users.\nWHY: Every message needs a resolved user identity for role-based routing.\nHOW: UPSERT -- inserts new user as role='user' if not found, returns existing if found.\n     Uses ON CONFLICT (signal_uuid) DO UPDATE to always return a row.\nNEXT: Normalize Content Key extracts cache key from URL.",
+        "onError": "continueErrorOutput",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// NORMALIZE CONTENT KEY\n// Extracts a stable, cache-friendly key from the URL.\n// YouTube: video ID (11 chars). Web: cleaned URL without tracking params.\n// Also determines _contentType for downstream routing.\n// UPDATED: Phase 1D — Added X/Twitter, GitHub, PDF, Spotify, Tidal detection\n//          + braindump/voice-note detection for no-URL messages\n\nconst item = $('Command Parser').first().json;\nconst url = item._url || '';\n\n// Attach identity from the Resolve Identity node\nconst identityData = $('Resolve Identity').first().json;\nconst userId = identityData?.id || null;\nconst userRole = identityData?.role || 'user';\nconst userName = identityData?.name || 'Unknown';\n\nlet contentKey = '';\nlet contentType = '';\n\nif (!url) {\n  // No URL — check for voice note attachment or braindump text\n  const isVoiceNote = item._hasAttachment && (item._attachmentType || '').startsWith('audio/');\n  const isBraindump = (item._flags?.braindump === true) || (!isVoiceNote && item._text && item._text.length > 0);\n\n  return [{ json: {\n    ...item,\n    _userId: userId,\n    _userRole: userRole,\n    _userName: userName,\n    _contentKey: '',\n    _contentType: isVoiceNote ? 'voice-note' : (isBraindump ? 'braindump' : 'none')\n  }}];\n}\n\n// ---- YOUTUBE ----\nconst ytPatterns = [\n  /(?:youtube\\.com\\/watch\\?.*v=)([a-zA-Z0-9_-]{11})/,\n  /(?:youtu\\.be\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/live\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]{11})/\n];\nfor (const pattern of ytPatterns) {\n  const match = url.match(pattern);\n  if (match) {\n    contentKey = `yt:${match[1]}`;\n    contentType = 'youtube';\n    break;\n  }\n}\n\n// ---- X/TWITTER ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(x\\.com|twitter\\.com)\\//i.test(url)) {\n  contentType = 'x-post';\n}\n\n// ---- GITHUB/GITLAB ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(github\\.com|gitlab\\.com)\\//i.test(url)) {\n  contentType = 'github';\n}\n\n// ---- PDF (URL ending in .pdf) ----\nif (!contentType && /\\.pdf(\\?|#|$)/i.test(url)) {\n  contentType = 'paper';\n}\n\n// ---- SPOTIFY ----\nif (!contentType && /^https?:\\/\\/open\\.spotify\\.com\\//i.test(url)) {\n  contentType = 'spotify';\n}\n\n// ---- TIDAL ----\nif (!contentType && /^https?:\\/\\/(www\\.)?tidal\\.com\\//i.test(url)) {\n  contentType = 'tidal';\n}\n\n// ---- WEB (fallback) ----\nif (!contentType) {\n  contentType = 'web';\n}\n\n// Build content key for all URL-based types (except YouTube, already set above)\nif (!contentKey) {\n  try {\n    const parsed = new URL(url);\n    const trackingParams = [\n      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',\n      'fbclid', 'gclid', 'ref', 'ref_src', 'ref_url',\n      'mc_cid', 'mc_eid', 's', 'si'\n    ];\n    for (const param of trackingParams) {\n      parsed.searchParams.delete(param);\n    }\n    const hostPath = parsed.hostname.toLowerCase() + parsed.pathname.replace(/\\/$/, '');\n    const query = parsed.searchParams.toString() ? '?' + parsed.searchParams.toString() : '';\n    const hash = parsed.hash || '';\n    contentKey = `web:${hostPath}${query}${hash}`;\n  } catch (e) {\n    contentKey = `web:${url.replace(/^https?:\\/\\//, '').replace(/\\/$/, '')}`;\n  }\n}\n\nreturn [{ json: {\n  ...item,\n  _userId: userId,\n  _userRole: userRole,\n  _userName: userName,\n  _contentKey: contentKey,\n  _contentType: contentType\n}}];\n"
+        },
+        "name": "Normalize Content Key",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2400,
+          304
+        ],
+        "notes": "WHAT: Extracts a stable content key from the URL for cache lookups.\nWHY: Same content shared by different users should hit the same cache entry.\nHOW: YouTube -> 'yt:<video_id>'. Web -> 'web:<cleaned_url>' (tracking params stripped).\n     Also attaches resolved identity (_userId, _userRole, _userName).\nNEXT: Cache Check queries PostgreSQL for existing results.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "url_cond",
+                "leftValue": "={{ $json._url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "exists",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Has URL?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2800,
+          304
+        ],
+        "notes": "WHAT: Checks if the message contains a URL.\nWHY: Messages without URLs (braindumps, text) don't need cache lookup or queuing.\nHOW: Checks _url is not null/empty.\nNEXT: True -> Cache Check. False -> dropped (no action for text-only in this workflow).",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT cc.content_key, cc.content_type, cc.title, cc.source_url, cc.transcript_path, cc.vault_path, cc.processed_at, cc.processed_by, cv.result AS _cachedSummary, cv.variant_type AS _cachedVariant FROM content_cache cc LEFT JOIN content_variants cv ON cc.content_key = cv.content_key AND cv.variant_type = 'summary' WHERE cc.content_key = '{{ $('Normalize Content Key').first().json._contentKey }}' LIMIT 1;",
+          "options": {}
+        },
+        "name": "Cache Check",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          3200,
+          304
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "PctDF92gLPazUEUV",
+            "name": "Postgres Signal"
+          }
+        },
+        "notes": "WHAT: Queries content_cache + content_variants for existing processed results.\nWHY: Avoid re-processing content that was already summarized.\nHOW: JOINs cache with summary variant on content_key.\nNEXT: Has Cache? routes to serve cached result or queue new job.",
+        "id": "YOUR_UUID",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// CHECK CACHE HIT — Routes based on Cache Check PostgreSQL result\n// The Cache Check node returns the cached row if found, empty object if not.\n// We check if content_key exists and is non-empty.\nconst cacheResult = $input.first().json;\nconst hasCacheHit = !!(cacheResult && cacheResult.content_key && cacheResult.content_key.length > 0);\n\nreturn [{ json: { ...cacheResult, _hasCacheHit: hasCacheHit } }];"
+        },
+        "name": "Check Cache Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3400,
+          304
+        ],
+        "notes": "Checks if Cache Check returned a cached row. Sets _hasCacheHit flag.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// SERVE CACHED RESULT\n// Formats the cached summary for Signal delivery.\n// Admin gets truncated summary + Forgejo link.\n// Regular user gets full summary text.\n\nconst item = $('Normalize Content Key').first().json;\nconst cacheData = $('Cache Check').first().json;\nconst userRole = item._userRole || 'user';\nconst summary = cacheData._cachedSummary || 'No summary available.';\nconst vaultPath = cacheData.vault_path || '';\nconst title = cacheData.title || 'Untitled';\nconst sourceUrl = cacheData.source_url || item._url || '';\n\n// Admin UUID for comparison\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || userRole === 'admin');\n\nlet response = '';\n\nif (isAdmin) {\n  // Admin: truncated summary (~1800 chars) + Forgejo vault link\n  const MAX_LEN = 1800;\n  const truncated = summary.length > MAX_LEN\n    ? summary.substring(0, MAX_LEN) + '\\n\\n[... truncated]'\n    : summary;\n\n  response = `\\u2705 [CACHED] ${title}\\n\\n${truncated}`;\n\n  if (vaultPath) {\n    const forgejoBase = 'https://YOUR_FORGEJO_DOMAIN/STMNA/second-brain/src/branch/main/';\n    response += `\\n\\n\\ud83d\\udcc1 Vault: ${forgejoBase}${encodeURI(vaultPath)}`;\n  }\n\n  if (sourceUrl) {\n    response += `\\n\\n\\ud83d\\udd17 Source: ${sourceUrl}`;\n  }\n} else {\n  // Regular user: full summary\n  response = `\\u2705 ${title}\\n\\n${summary}`;\n\n  if (sourceUrl) {\n    response += `\\n\\n\\ud83d\\udd17 Source: ${sourceUrl}`;\n  }\n}\n\n// Check if admin and no vault_path -- queue a vault write job\nlet needsVaultWrite = false;\nif (isAdmin && !vaultPath) {\n  needsVaultWrite = true;\n}\n\nreturn [{ json: {\n  ...item,\n  _response: response,\n  _cached: true,\n  _needsVaultWrite: needsVaultWrite,\n  _cachedTitle: title,\n  _cachedSummary: summary\n}}];"
+        },
+        "name": "Serve Cached",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3800,
+          208
+        ],
+        "notes": "WHAT: Formats cached summary for Signal response.\nWHY: Avoid re-processing -- serve from cache immediately.\nHOW: Admin gets truncated summary + Forgejo link. User gets full text.\n     If admin and no vault_path, flags for vault write job.\nNEXT: Send Cache Response delivers via Signal API.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "name": "Send Cache Response",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4100,
+          208
+        ],
+        "notes": "WHAT: Sends cached result back to sender via Signal API.\nWHY: Deliver the cached summary immediately.\nHOW: POST to Signal v2/send with dynamic recipient UUID.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "={{ (() => {\n  const nck = $('Normalize Content Key').first().json;\n  const isAdmin = (nck._senderUuid === 'YOUR_UUID' || nck._userRole === 'admin');\n  const priority = isAdmin ? 'immediate' : 'scheduled';\n  const scheduledAfter = isAdmin ? 'NULL' : \"(CURRENT_DATE + INTERVAL '1 day' + INTERVAL '4 hours')\";\n  const flagsJson = JSON.stringify(nck._flags || {}).replace(/'/g, \"''\");\n  const url = (nck._url || '').replace(/'/g, \"''\");\n  const ct = nck._contentType || 'web';\n  const src = nck._source || 'signal';\n  const msg = (nck._message || '').replace(/'/g, \"''\");\n  const userId = nck._userId || 1;\n  return `INSERT INTO pipeline_queue (url, content_type, flags, sender, source_channel, message_text, priority, scheduled_after, status) VALUES ('${url}', '${ct}', '${flagsJson}', ${userId}, '${src}', '${msg}', '${priority}', ${scheduledAfter}, 'pending') RETURNING id, priority, scheduled_after;`;\n})() }}",
+          "options": {}
+        },
+        "name": "Queue Job",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          3800,
+          500
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "PctDF92gLPazUEUV",
+            "name": "Postgres Signal"
+          }
+        },
+        "notes": "WHAT: Inserts a new processing job into pipeline_queue.\nWHY: Content not in cache -- needs to be processed by the Processing workflow.\nHOW: Admin jobs get priority='immediate'. User jobs get priority='scheduled' (next 4 AM).\nNEXT: Send Ack notifies the sender that their request is queued.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// SEND ACK — Acknowledges queued job to sender\n// Admin: \"Getting details on [link]\"\n// User: \"Getting details on [link] + ready tomorrow morning\"\n\nconst item = $('Normalize Content Key').first().json;\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\nconst url = item._url || '';\n\nlet response = '';\n\nif (isAdmin) {\n  response = `\\ud83d\\udd0d Getting details on ${url}`;\n} else {\n  response = `\\ud83d\\udd0d Getting details on ${url}\\n\\nReady for you tomorrow first thing in the morning!`;\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+        },
+        "name": "Send Ack",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4100,
+          500
+        ],
+        "notes": "WHAT: Builds acknowledgment message for the sender.\nWHY: User should know their request was received and when to expect results.\nHOW: Admin sees 'Processing...' + job ID. User sees 'Queued for 4 AM'.\nNEXT: Send Ack Message delivers via Signal API.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "name": "Send Ack Message",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4400,
+          500
+        ],
+        "notes": "WHAT: Sends queue acknowledgment back to sender via Signal API.\nWHY: Immediate feedback that the request was received.\nHOW: POST to Signal v2/send with dynamic recipient UUID.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ERROR HANDLER -- Formats user-friendly error messages\nconst item = $input.first().json;\nconst errorMsg = item.error?.message || item.message || 'Unknown error occurred';\nconst nodeName = item.error?.node || 'Unknown node';\n\n// Build user-friendly error message\nconst response = [\n  'Error processing your content:',\n  '',\n  errorMsg.substring(0, 500),\n  '',\n  `Failed at: ${nodeName}`,\n  '',\n  'Tips:',\n  '- Check if the URL is accessible',\n  '- YouTube: verify video is not private/age-restricted',\n  '- Web: some sites block scraping',\n  '- Try again in a few minutes',\n].join('\\n');\n\nreturn [{ json: { ...(item._senderUuid ? item : {}), _response: response, _error: true, _senderUuid: item._senderUuid || 'YOUR_UUID' } }];"
+        },
+        "name": "Error Handler",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2900,
+          900
+        ],
+        "notes": "WHAT: Catches pipeline failures, formats user-friendly error.\nWHY: User should get informative feedback, not raw stack traces.\nHOW: Extracts error message, adds troubleshooting tips.\nNEXT: Send Error Msg sends error back via Signal.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "name": "Send Error Msg",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3200,
+          900
+        ],
+        "notes": "WHAT: Sends error message back to user via Signal.",
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "cache_hit_cond",
+                "leftValue": "={{ $json._hasCacheHit }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Has Cache?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          3600,
+          304
+        ],
+        "id": "has-cache-if-new"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "caseSensitive": true,
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "not_spotify",
+                "leftValue": "={{ $json._contentType }}",
+                "rightValue": "spotify",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEquals"
+                }
+              },
+              {
+                "id": "not_tidal",
+                "leftValue": "={{ $json._contentType }}",
+                "rightValue": "tidal",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEquals"
+                }
+              },
+              {
+                "id": "not_none_text",
+                "leftValue": "={{ $json._contentType }}",
+                "rightValue": "none",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEquals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Supported Type?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          2550,
+          304
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// UNSUPPORTED RESPONSE — Spotify/Tidal \"coming soon\" + empty message handling\nconst item = $input.first().json;\nconst ct = item._contentType || 'none';\n\nlet response = '';\nif (ct === 'spotify') {\n  response = '\\u{1F3B5} Spotify support coming soon! For now, share the YouTube link if available.';\n} else if (ct === 'tidal') {\n  response = '\\u{1F3B5} Tidal support coming soon! For now, share the YouTube link if available.';\n} else {\n  // _contentType === 'none' — no URL, no text, no attachment\n  response = \"I didn't catch that. Send me a URL, a voice note, or text with the braindump flag.\\n\\nSend help for available commands.\";\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+        },
+        "name": "Unsupported Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2750,
+          600
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "name": "Send Unsupported Msg",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3050,
+          600
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "={{ (() => {\n  const nck = $('Normalize Content Key').first().json;\n  const isAdmin = (nck._senderUuid === 'YOUR_UUID' || nck._userRole === 'admin');\n  const priority = isAdmin ? 'immediate' : 'scheduled';\n  const scheduledAfter = isAdmin ? 'NULL' : \"(CURRENT_DATE + INTERVAL '1 day' + INTERVAL '4 hours')\";\n  const flagsJson = JSON.stringify(nck._flags || {}).replace(/'/g, \"''\");\n  const ct = nck._contentType || 'braindump';\n  const src = nck._source || 'signal';\n  const userId = nck._userId || 1;\n  // For voice notes: store attachment metadata as JSON in message_text\n  // so the Worker's Download Attachment node can retrieve the file\n  let msg;\n  if (ct === 'voice-note' && nck._attachmentId) {\n    msg = JSON.stringify({\n      attachmentId: nck._attachmentId,\n      attachmentType: nck._attachmentType || 'audio/ogg',\n      originalMessage: nck._message || ''\n    }).replace(/'/g, \"''\");\n  } else {\n    msg = (nck._message || '').replace(/'/g, \"''\");\n  }\n  return `INSERT INTO pipeline_queue (url, content_type, flags, sender, source_channel, message_text, priority, scheduled_after, status) VALUES ('', '${ct}', '${flagsJson}', ${userId}, '${src}', '${msg}', '${priority}', ${scheduledAfter}, 'pending') RETURNING id, priority, scheduled_after;`;\n})() }}",
+          "options": {}
+        },
+        "name": "Queue Braindump",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          2950,
+          100
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "PctDF92gLPazUEUV",
+            "name": "Postgres Signal"
+          }
+        },
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// BRAINDUMP/VOICE ACK — Acknowledge queued braindump or voice note\nconst item = $('Normalize Content Key').first().json;\nconst ct = item._contentType || 'braindump';\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\n\nlet response = '';\nif (ct === 'voice-note') {\n  response = '\\u{1F3A4} Transcribing your voice note...';\n} else {\n  response = '\\u{1F4DD} Structuring your braindump...';\n}\n\nif (!isAdmin) {\n  response += '\\n\\nReady for you tomorrow first thing in the morning!';\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+        },
+        "name": "Braindump Ack",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3250,
+          100
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://YOUR_TAILSCALE_IP:8082/v2/send",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ message: $json._response, number: 'YOUR_PHONE_NUMBER', recipients: [$json._senderUuid || 'YOUR_UUID'] }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "name": "Send Braindump Ack",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3550,
+          100
+        ],
+        "id": "YOUR_UUID"
+      }
+    ],
+    "connections": {
+      "Schedule Trigger": {
+        "main": [
+          [
+            {
+              "node": "Poll Signal API",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Poll Signal API": {
+        "main": [
+          [
+            {
+              "node": "Filter Empty",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Filter Empty": {
+        "main": [
+          [
+            {
+              "node": "Split Messages",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Split Messages": {
+        "main": [
+          [],
+          [
+            {
+              "node": "Normalize Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook Trigger": {
+        "main": [
+          [
+            {
+              "node": "Normalize Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Input": {
+        "main": [
+          [
+            {
+              "node": "Command Parser",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Command Parser": {
+        "main": [
+          [
+            {
+              "node": "Help Check",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Help Check": {
+        "main": [
+          [
+            {
+              "node": "Help Response",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Resolve Identity",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Help Response": {
+        "main": [
+          [
+            {
+              "node": "Send Help",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Resolve Identity": {
+        "main": [
+          [
+            {
+              "node": "Normalize Content Key",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Error Handler",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Content Key": {
+        "main": [
+          [
+            {
+              "node": "Supported Type?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has URL?": {
+        "main": [
+          [
+            {
+              "node": "Cache Check",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Queue Braindump",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cache Check": {
+        "main": [
+          [
+            {
+              "node": "Check Cache Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Cache?": {
+        "main": [
+          [
+            {
+              "node": "Serve Cached",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Queue Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Serve Cached": {
+        "main": [
+          [
+            {
+              "node": "Send Cache Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Queue Job": {
+        "main": [
+          [
+            {
+              "node": "Send Ack",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Ack": {
+        "main": [
+          [
+            {
+              "node": "Send Ack Message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Error Handler": {
+        "main": [
+          [
+            {
+              "node": "Send Error Msg",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Cache Result": {
+        "main": [
+          [
+            {
+              "node": "Has Cache?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supported Type?": {
+        "main": [
+          [
+            {
+              "node": "Has URL?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Unsupported Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unsupported Response": {
+        "main": [
+          [
+            {
+              "node": "Send Unsupported Msg",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Queue Braindump": {
+        "main": [
+          [
+            {
+              "node": "Braindump Ack",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Braindump Ack": {
+        "main": [
+          [
+            {
+              "node": "Send Braindump Ack",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "n8n admin",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-22T17:59:29.188Z",
+        "id": 248,
+        "workflowId": "G8P8MN81WrYqmhqB",
+        "versionId": "YOUR_UUID",
+        "event": "activated",
+        "userId": "YOUR_UUID"
+      },
+      {
+        "createdAt": "2026-02-22T17:59:29.282Z",
+        "id": 250,
+        "workflowId": "G8P8MN81WrYqmhqB",
+        "versionId": "YOUR_UUID",
+        "event": "activated",
+        "userId": "YOUR_UUID"
+      },
+      {
+        "createdAt": "2026-02-27T10:35:40.920Z",
+        "id": 549,
+        "workflowId": "G8P8MN81WrYqmhqB",
+        "versionId": "YOUR_UUID",
+        "event": "activated",
+        "userId": "YOUR_UUID"
+      },
+      {
+        "createdAt": "2026-02-22T17:59:29.160Z",
+        "id": 247,
+        "workflowId": "G8P8MN81WrYqmhqB",
+        "versionId": "YOUR_UUID",
+        "event": "deactivated",
+        "userId": "YOUR_UUID"
+      },
+      {
+        "createdAt": "2026-02-22T17:59:29.231Z",
+        "id": 249,
+        "workflowId": "G8P8MN81WrYqmhqB",
+        "versionId": "YOUR_UUID",
+        "event": "deactivated",
+        "userId": "YOUR_UUID"
+      },
+      {
+        "createdAt": "2026-02-27T10:35:40.882Z",
+        "id": 548,
+        "workflowId": "G8P8MN81WrYqmhqB",
+        "versionId": "YOUR_UUID",
+        "event": "deactivated",
+        "userId": "YOUR_UUID"
+      }
+    ]
+  }
+}

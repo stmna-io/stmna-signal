@@ -1,0 +1,532 @@
+{
+  "name": "Signal_Cleanup",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Daily 5 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM content_cache WHERE expires_at IS NOT NULL AND expires_at < NOW();",
+        "additionalFields": {}
+      },
+      "name": "Purge Expired Cache",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        480,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_POSTGRES_CREDENTIAL"
+        }
+      },
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "jsCode": "// CLEANUP TRANSCRIPTS + TEMP FILES\n// UPDATED: Phase 1E — Added /tmp/nc_* and /tmp/audio_* cleanup — Delete .transcripts/ files older than 14 days\n// WHAT: Removes stale transcript files from the vault.\n// WHY: Transcripts are working files, not permanent assets. The vault note is the permanent record.\n// HOW: Uses child_process to find and delete files older than 14 days.\n\nconst { execFileSync } = require('child_process');\n\n// Find and delete transcript files older than 14 days\nconst dirs = [\n  '/vault/30-SIGNALS/32-YouTube/.transcripts',\n  '/vault/30-SIGNALS/36-Podcasts/.transcripts'\n];\n\nlet deleted = 0;\nlet errors = [];\n\nfor (const dir of dirs) {\n  try {\n    // Check if directory exists\n    const fs = require('fs');\n    if (!fs.existsSync(dir)) continue;\n    \n    const files = fs.readdirSync(dir);\n    const now = Date.now();\n    const fourteenDays = 14 * 24 * 60 * 60 * 1000;\n    \n    for (const file of files) {\n      if (file.startsWith('.') || file.startsWith('_')) continue; // Skip hidden/template files\n      const filePath = `${dir}/${file}`;\n      try {\n        const stats = fs.statSync(filePath);\n        if (now - stats.mtimeMs > fourteenDays) {\n          fs.unlinkSync(filePath);\n          deleted++;\n        }\n      } catch (e) {\n        errors.push(`${filePath}: ${e.message}`);\n      }\n    }\n  } catch (e) {\n    errors.push(`${dir}: ${e.message}`);\n  }\n}\n\n// Phase 1E: Clean stale NextCloud temp files (older than 24h)\nconst tmpCleanup = { nc: 0, audio: 0 };\ntry {\n  const tmpFiles = fs.readdirSync('/tmp');\n  const oneDay = 24 * 60 * 60 * 1000;\n  for (const file of tmpFiles) {\n    if ((file.startsWith('nc_') || file.startsWith('audio_')) && !file.startsWith('.')) {\n      const filePath = `/tmp/${file}`;\n      try {\n        const stats = fs.statSync(filePath);\n        if (now - stats.mtimeMs > oneDay) {\n          fs.unlinkSync(filePath);\n          if (file.startsWith('nc_')) tmpCleanup.nc++;\n          else tmpCleanup.audio++;\n        }\n      } catch(e) { errors.push(`${filePath}: ${e.message}`); }\n    }\n  }\n} catch(e) { errors.push(`/tmp cleanup: ${e.message}`); }\n\nreturn [{ json: {\n  _transcriptsDeleted: deleted,\n  _errors: errors,\n  _timestamp: new Date().toISOString(),\n  _tmpNcDeleted: tmpCleanup.nc,\n  _tmpAudioDeleted: tmpCleanup.audio\n}}];"
+      },
+      "name": "Cleanup Transcripts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT (SELECT COUNT(*) FROM content_cache) as cache_rows, (SELECT COUNT(*) FROM content_variants) as variant_rows, (SELECT COUNT(*) FROM pipeline_queue WHERE status = 'done') as done_jobs, (SELECT COUNT(*) FROM pipeline_queue WHERE status = 'failed') as failed_jobs;",
+        "additionalFields": {}
+      },
+      "name": "Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        960,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_POSTGRES_CREDENTIAL"
+        }
+      },
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "content": "## SIGNAL CLEANUP\n\nDaily at 5:00 AM:\n1. DELETE expired cache entries (cascades to variants)\n2. Delete transcript files older than 14 days\n3. Report stats",
+        "height": 200,
+        "width": 800,
+        "color": 7
+      },
+      "name": "Section: CLEANUP",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        200,
+        120
+      ],
+      "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "name": "Daily 8 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        600
+      ],
+      "id": "daily-8am-trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT pq.id, pq.response_text, pq.sender, pu.signal_uuid FROM pipeline_queue pq JOIN pipeline_users pu ON pq.sender = pu.id WHERE pq.response_sent = FALSE AND pq.response_text IS NOT NULL AND pq.status = 'done' ORDER BY pq.created_at;",
+        "options": {}
+      },
+      "name": "Fetch Pending Responses",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        500,
+        600
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_POSTGRES_CREDENTIAL"
+        }
+      },
+      "id": "fetch-pending-resp",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// SEND DEFERRED RESPONSES — Deliver saved responses at 8 AM\n// Iterates over all pending responses, sends each via Signal, marks as sent.\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const { id, response_text, signal_uuid } = item.json;\n\n  // Skip if no response text or no recipient\n  if (!response_text || !signal_uuid) {\n    results.push({ json: { jobId: id, sent: false, reason: 'missing data' } });\n    continue;\n  }\n\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: 'http://YOUR_TAILSCALE_IP:8082/v2/send',\n      body: {\n        message: response_text,\n        number: 'YOUR_PHONE_NUMBER',\n        recipients: [signal_uuid]\n      },\n      headers: { 'Content-Type': 'application/json' },\n      timeout: 10000\n    });\n    results.push({ json: { jobId: id, sent: true } });\n  } catch (e) {\n    results.push({ json: { jobId: id, sent: false, error: e.message } });\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { _noResponses: true } }];\n}\n\nreturn results;"
+      },
+      "name": "Send Deferred Msgs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        600
+      ],
+      "id": "send-deferred-msgs"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE pipeline_queue SET response_sent = TRUE WHERE response_sent = FALSE AND response_text IS NOT NULL AND status = 'done';",
+        "options": {}
+      },
+      "name": "Mark Responses Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1100,
+        600
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_POSTGRES_CREDENTIAL"
+        }
+      },
+      "id": "mark-resp-sent"
+    }
+  ],
+  "connections": {
+    "Daily 5 AM": {
+      "main": [
+        [
+          {
+            "node": "Purge Expired Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Purge Expired Cache": {
+      "main": [
+        [
+          {
+            "node": "Cleanup Transcripts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup Transcripts": {
+      "main": [
+        [
+          {
+            "node": "Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daily 8 AM": {
+      "main": [
+        [
+          {
+            "node": "Fetch Pending Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Pending Responses": {
+      "main": [
+        [
+          {
+            "node": "Send Deferred Msgs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Deferred Msgs": {
+      "main": [
+        [
+          {
+            "node": "Mark Responses Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {
+    "node:Daily 5 AM": {
+      "recurrenceRules": []
+    },
+    "node:Daily 8 AM": {
+      "recurrenceRules": []
+    }
+  },
+  "pinData": null,
+  "activeVersionId": "YOUR_UUID",
+  "versionCounter": 38,
+  "triggerCount": 2,
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-02-22T20:53:57.707Z",
+    "createdAt": "2026-02-22T20:53:57.707Z",
+    "versionId": "YOUR_UUID",
+    "workflowId": "8VXtE1NbIOCrAmXp",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 5 * * *"
+              }
+            ]
+          }
+        },
+        "name": "Daily 5 AM",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          240,
+          300
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "DELETE FROM content_cache WHERE expires_at IS NOT NULL AND expires_at < NOW();",
+          "additionalFields": {}
+        },
+        "name": "Purge Expired Cache",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          480,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "PctDF92gLPazUEUV",
+            "name": "Postgres Signal"
+          }
+        },
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "jsCode": "// CLEANUP TRANSCRIPTS + TEMP FILES\n// UPDATED: Phase 1E — Added /tmp/nc_* and /tmp/audio_* cleanup — Delete .transcripts/ files older than 14 days\n// WHAT: Removes stale transcript files from the vault.\n// WHY: Transcripts are working files, not permanent assets. The vault note is the permanent record.\n// HOW: Uses child_process to find and delete files older than 14 days.\n\nconst { execFileSync } = require('child_process');\n\n// Find and delete transcript files older than 14 days\nconst dirs = [\n  '/vault/30-SIGNALS/32-YouTube/.transcripts',\n  '/vault/30-SIGNALS/36-Podcasts/.transcripts'\n];\n\nlet deleted = 0;\nlet errors = [];\n\nfor (const dir of dirs) {\n  try {\n    // Check if directory exists\n    const fs = require('fs');\n    if (!fs.existsSync(dir)) continue;\n    \n    const files = fs.readdirSync(dir);\n    const now = Date.now();\n    const fourteenDays = 14 * 24 * 60 * 60 * 1000;\n    \n    for (const file of files) {\n      if (file.startsWith('.') || file.startsWith('_')) continue; // Skip hidden/template files\n      const filePath = `${dir}/${file}`;\n      try {\n        const stats = fs.statSync(filePath);\n        if (now - stats.mtimeMs > fourteenDays) {\n          fs.unlinkSync(filePath);\n          deleted++;\n        }\n      } catch (e) {\n        errors.push(`${filePath}: ${e.message}`);\n      }\n    }\n  } catch (e) {\n    errors.push(`${dir}: ${e.message}`);\n  }\n}\n\n// Phase 1E: Clean stale NextCloud temp files (older than 24h)\nconst tmpCleanup = { nc: 0, audio: 0 };\ntry {\n  const tmpFiles = fs.readdirSync('/tmp');\n  const oneDay = 24 * 60 * 60 * 1000;\n  for (const file of tmpFiles) {\n    if ((file.startsWith('nc_') || file.startsWith('audio_')) && !file.startsWith('.')) {\n      const filePath = `/tmp/${file}`;\n      try {\n        const stats = fs.statSync(filePath);\n        if (now - stats.mtimeMs > oneDay) {\n          fs.unlinkSync(filePath);\n          if (file.startsWith('nc_')) tmpCleanup.nc++;\n          else tmpCleanup.audio++;\n        }\n      } catch(e) { errors.push(`${filePath}: ${e.message}`); }\n    }\n  }\n} catch(e) { errors.push(`/tmp cleanup: ${e.message}`); }\n\nreturn [{ json: {\n  _transcriptsDeleted: deleted,\n  _errors: errors,\n  _timestamp: new Date().toISOString(),\n  _tmpNcDeleted: tmpCleanup.nc,\n  _tmpAudioDeleted: tmpCleanup.audio\n}}];"
+        },
+        "name": "Cleanup Transcripts",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          720,
+          300
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT (SELECT COUNT(*) FROM content_cache) as cache_rows, (SELECT COUNT(*) FROM content_variants) as variant_rows, (SELECT COUNT(*) FROM pipeline_queue WHERE status = 'done') as done_jobs, (SELECT COUNT(*) FROM pipeline_queue WHERE status = 'failed') as failed_jobs;",
+          "additionalFields": {}
+        },
+        "name": "Stats",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          960,
+          300
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "PctDF92gLPazUEUV",
+            "name": "Postgres Signal"
+          }
+        },
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "content": "## SIGNAL CLEANUP\n\nDaily at 5:00 AM:\n1. DELETE expired cache entries (cascades to variants)\n2. Delete transcript files older than 14 days\n3. Report stats",
+          "height": 200,
+          "width": 800,
+          "color": 7
+        },
+        "name": "Section: CLEANUP",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          200,
+          120
+        ],
+        "id": "YOUR_UUID"
+      },
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "triggerAtHour": 8,
+                "triggerAtMinute": 0
+              }
+            ]
+          }
+        },
+        "name": "Daily 8 AM",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          200,
+          600
+        ],
+        "id": "daily-8am-trigger"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT pq.id, pq.response_text, pq.sender, pu.signal_uuid FROM pipeline_queue pq JOIN pipeline_users pu ON pq.sender = pu.id WHERE pq.response_sent = FALSE AND pq.response_text IS NOT NULL AND pq.status = 'done' ORDER BY pq.created_at;",
+          "options": {}
+        },
+        "name": "Fetch Pending Responses",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          500,
+          600
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "PctDF92gLPazUEUV",
+            "name": "Postgres Signal"
+          }
+        },
+        "id": "fetch-pending-resp",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// SEND DEFERRED RESPONSES — Deliver saved responses at 8 AM\n// Iterates over all pending responses, sends each via Signal, marks as sent.\n\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const { id, response_text, signal_uuid } = item.json;\n\n  // Skip if no response text or no recipient\n  if (!response_text || !signal_uuid) {\n    results.push({ json: { jobId: id, sent: false, reason: 'missing data' } });\n    continue;\n  }\n\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: 'http://YOUR_TAILSCALE_IP:8082/v2/send',\n      body: {\n        message: response_text,\n        number: 'YOUR_PHONE_NUMBER',\n        recipients: [signal_uuid]\n      },\n      headers: { 'Content-Type': 'application/json' },\n      timeout: 10000\n    });\n    results.push({ json: { jobId: id, sent: true } });\n  } catch (e) {\n    results.push({ json: { jobId: id, sent: false, error: e.message } });\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { _noResponses: true } }];\n}\n\nreturn results;"
+        },
+        "name": "Send Deferred Msgs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          800,
+          600
+        ],
+        "id": "send-deferred-msgs"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE pipeline_queue SET response_sent = TRUE WHERE response_sent = FALSE AND response_text IS NOT NULL AND status = 'done';",
+          "options": {}
+        },
+        "name": "Mark Responses Sent",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.5,
+        "position": [
+          1100,
+          600
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "PctDF92gLPazUEUV",
+            "name": "Postgres Signal"
+          }
+        },
+        "id": "mark-resp-sent"
+      }
+    ],
+    "connections": {
+      "Daily 5 AM": {
+        "main": [
+          [
+            {
+              "node": "Purge Expired Cache",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Purge Expired Cache": {
+        "main": [
+          [
+            {
+              "node": "Cleanup Transcripts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cleanup Transcripts": {
+        "main": [
+          [
+            {
+              "node": "Stats",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Daily 8 AM": {
+        "main": [
+          [
+            {
+              "node": "Fetch Pending Responses",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Pending Responses": {
+        "main": [
+          [
+            {
+              "node": "Send Deferred Msgs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Deferred Msgs": {
+        "main": [
+          [
+            {
+              "node": "Mark Responses Sent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "n8n admin",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-02-22T20:53:57.759Z",
+        "id": 272,
+        "workflowId": "8VXtE1NbIOCrAmXp",
+        "versionId": "YOUR_UUID",
+        "event": "activated",
+        "userId": "YOUR_UUID"
+      },
+      {
+        "createdAt": "2026-02-27T10:35:59.855Z",
+        "id": 553,
+        "workflowId": "8VXtE1NbIOCrAmXp",
+        "versionId": "YOUR_UUID",
+        "event": "activated",
+        "userId": "YOUR_UUID"
+      },
+      {
+        "createdAt": "2026-02-27T10:35:59.814Z",
+        "id": 552,
+        "workflowId": "8VXtE1NbIOCrAmXp",
+        "versionId": "YOUR_UUID",
+        "event": "deactivated",
+        "userId": "YOUR_UUID"
+      }
+    ]
+  }
+}
