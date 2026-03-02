@@ -89,13 +89,25 @@ See [sql/](../sql/) for the full schema.
 
 ## Required Credentials
 
-After import, create these credential types in n8n and assign them:
+Create these credential types in n8n (**Settings → Credentials → Add credential**), then reassign them to each workflow after import.
 
-| Credential Type | Used by | Notes |
-|----------------|---------|-------|
-| `Postgres` | Ingestion, Worker, Cleanup, NextCloud | Point to your `stmna_signal` database |
-| `HTTP Header Auth` | Ingestion | For authenticating incoming Signal webhook |
-| `HTTP Basic Auth` | NextCloud | NextCloud WebDAV credentials |
+### `Postgres` credential
+Point to your `stmna_signal` database. Used by every workflow.
+
+| Workflow | Nodes using this credential |
+|----------|-----------------------------|
+| Signal_Ingestion | Resolve Identity, Cache Check, Queue Job, Queue Braindump |
+| Signal_Worker | Pick Job, Get Sender Info, Exec Cache Upsert, Mark Done, Mark Failed, Save Deferred Response |
+| Signal_NextCloud | Cache Check, Queue Job, Queue Dedup Check |
+| Signal_Cleanup | Purge Expired Cache, Stats, Fetch Pending Responses, Mark Responses Sent |
+
+### `Nextcloud` credential
+Used for WebDAV file operations (list, download, move files in NextCloud). Only required if you use the Signal_NextCloud workflow or the NextCloud delivery path in Signal_Worker.
+
+| Workflow | Nodes using this credential |
+|----------|-----------------------------|
+| Signal_Worker | NC Upload Translated, Move NC to Processed |
+| Signal_NextCloud | List Inbox Files, Download File, Move to Processed, Move Cached to Processed, List Translate Files |
 
 To create credentials: **Settings → Credentials → Add credential**
 
