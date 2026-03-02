@@ -1,0 +1,53 @@
+# STMNA Signal — Docker Compose (Staging / Clean Deploy)
+#
+# This compose file deploys the STMNA Signal stack on a clean machine.
+# It assumes STMNA Desk (inference stack) is running separately and reachable
+# via LLAMA_SWAP_URL and WHISPER_URL environment variables.
+#
+# TODO: Finalize in SB-06 (Staging Pipeline session) after smoke testing.
+# See .env.example for required environment variables.
+
+services:
+
+  # n8n — workflow orchestrator with Signal-specific extensions
+  n8n:
+    image: ghcr.io/stmna-io/stmna-n8n:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: stmna-signal-n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ${VAULT_DIR}:/vault:ro
+    depends_on:
+      - postgres
+    # TODO: add x-podman section for rootless Podman compatibility
+
+  # PostgreSQL — pipeline queue, cache, training data
+  postgres:
+    image: postgres:16-alpine
+    container_name: stmna-signal-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  n8n_data:
+  postgres_data:
