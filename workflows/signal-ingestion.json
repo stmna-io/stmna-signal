@@ -205,7 +205,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// COMMAND PARSER -- Extract flags + URL from message\n// All Phase 2 flags are parsed but currently no-op.\n\nconst item = $input.first().json;\nconst message = item._message || '';\n\nconst flags = {\n  tts: false, translate: null, deep: false,\n  quick: false, transcript_only: false,\n  braindump: false, book: false, help: false, dub: null\n};\n\nlet content = message;\n\nif (/\\bhelp\\b/i.test(content)) { flags.help = true; }\nif (/\\btts\\b/i.test(content)) { flags.tts = true; content = content.replace(/\\btts\\b/i, ''); }\nif (/\\btranslate\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.translate = content.match(/translate\\s+(en|fr|nl|de|es)/i)[1];\n  content = content.replace(/\\btranslate\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdub\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.dub = content.match(/dub\\s+(en|fr|nl|de|es)/i)[1];\n  content = content.replace(/\\bdub\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdeep\\b/i.test(content)) { flags.deep = true; content = content.replace(/\\bdeep\\b/i, ''); }\nif (/\\bquick\\b/i.test(content)) { flags.quick = true; content = content.replace(/\\bquick\\b/i, ''); }\nif (/\\btranscript\\b/i.test(content)) { flags.transcript_only = true; content = content.replace(/\\btranscript\\b/i, ''); }\nif (/\\bbraindump\\b/i.test(content)) { flags.braindump = true; content = content.replace(/\\bbraindump\\b/i, ''); }\nif (/\\bbook\\b/i.test(content)) { flags.book = true; content = content.replace(/\\bbook\\b/i, ''); }\n\nconst url = content.trim().match(/https?:\\/\\/\\S+/)?.[0] || null;\nconst text = url ? content.replace(url, '').trim() : content.trim();\n\nreturn [{ json: { ...item, _flags: flags, _url: url, _text: text, _hasAttachment: item._hasAttachment || false } }];"
+        "jsCode": "// COMMAND PARSER -- Extract flags + URL from message\n// All Phase 2 flags are parsed but currently no-op.\n// Shorthand: bare \"fr\", \"en\", etc. = translate to that language\n\nconst item = $input.first().json;\nconst message = item._message || '';\n\nconst flags = {\n  tts: false, translate: null, deep: false,\n  quick: false, transcript_only: false,\n  braindump: false, book: false, help: false, dub: null\n};\n\nlet content = message;\n\nif (/\\bhelp\\b/i.test(content)) { flags.help = true; }\nif (/\\btts\\b/i.test(content)) { flags.tts = true; content = content.replace(/\\btts\\b/i, ''); }\nif (/\\btranslate\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.translate = content.match(/translate\\s+(en|fr|nl|de|es)/i)[1].toLowerCase();\n  content = content.replace(/\\btranslate\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdub\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.dub = content.match(/dub\\s+(en|fr|nl|de|es)/i)[1].toLowerCase();\n  content = content.replace(/\\bdub\\s+(en|fr|nl|de|es)\\b/i, '');\n}\n// Shorthand: bare language code (fr, en, nl, de, es) = translate\n// Only if translate wasn't already set by \"translate <lang>\" above\nif (!flags.translate && /\\b(en|fr|nl|de|es)\\b/i.test(content)) {\n  const langMatch = content.match(/\\b(en|fr|nl|de|es)\\b/i);\n  // Make sure it's not part of a URL (check it's not preceded by / or .)\n  const idx = content.indexOf(langMatch[0]);\n  const before = idx > 0 ? content[idx - 1] : ' ';\n  if (before !== '/' && before !== '.') {\n    flags.translate = langMatch[1].toLowerCase();\n    content = content.replace(new RegExp('\\\\b' + langMatch[1] + '\\\\b', 'i'), '');\n  }\n}\nif (/\\bdeep\\b/i.test(content)) { flags.deep = true; content = content.replace(/\\bdeep\\b/i, ''); }\nif (/\\bquick\\b/i.test(content)) { flags.quick = true; content = content.replace(/\\bquick\\b/i, ''); }\nif (/\\btranscript\\b/i.test(content)) { flags.transcript_only = true; content = content.replace(/\\btranscript\\b/i, ''); }\nif (/\\bbraindump\\b/i.test(content)) { flags.braindump = true; content = content.replace(/\\bbraindump\\b/i, ''); }\nif (/\\bbook\\b/i.test(content)) { flags.book = true; content = content.replace(/\\bbook\\b/i, ''); }\n\nconst url = content.trim().match(/https?:\\/\\/\\S+/)?.[0] || null;\nconst text = url ? content.replace(url, '').trim() : content.trim();\n\nreturn [{ json: { ...item, _flags: flags, _url: url, _text: text, _hasAttachment: item._hasAttachment || false } }];"
       },
       "name": "Command Parser",
       "type": "n8n-nodes-base.code",
@@ -995,12 +995,12 @@
   },
   "pinData": null,
   "activeVersionId": "YOUR_UUID",
-  "versionCounter": 88,
+  "versionCounter": 94,
   "triggerCount": 2,
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-02-22T17:59:29.118Z",
-    "createdAt": "2026-02-22T17:59:29.118Z",
+    "updatedAt": "2026-03-04T09:53:27.274Z",
+    "createdAt": "2026-03-04T09:53:27.274Z",
     "versionId": "YOUR_UUID",
     "workflowId": "G8P8MN81WrYqmhqB",
     "nodes": [
@@ -1205,7 +1205,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// COMMAND PARSER -- Extract flags + URL from message\n// All Phase 2 flags are parsed but currently no-op.\n\nconst item = $input.first().json;\nconst message = item._message || '';\n\nconst flags = {\n  tts: false, translate: null, deep: false,\n  quick: false, transcript_only: false,\n  braindump: false, book: false, help: false, dub: null\n};\n\nlet content = message;\n\nif (/\\bhelp\\b/i.test(content)) { flags.help = true; }\nif (/\\btts\\b/i.test(content)) { flags.tts = true; content = content.replace(/\\btts\\b/i, ''); }\nif (/\\btranslate\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.translate = content.match(/translate\\s+(en|fr|nl|de|es)/i)[1];\n  content = content.replace(/\\btranslate\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdub\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.dub = content.match(/dub\\s+(en|fr|nl|de|es)/i)[1];\n  content = content.replace(/\\bdub\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdeep\\b/i.test(content)) { flags.deep = true; content = content.replace(/\\bdeep\\b/i, ''); }\nif (/\\bquick\\b/i.test(content)) { flags.quick = true; content = content.replace(/\\bquick\\b/i, ''); }\nif (/\\btranscript\\b/i.test(content)) { flags.transcript_only = true; content = content.replace(/\\btranscript\\b/i, ''); }\nif (/\\bbraindump\\b/i.test(content)) { flags.braindump = true; content = content.replace(/\\bbraindump\\b/i, ''); }\nif (/\\bbook\\b/i.test(content)) { flags.book = true; content = content.replace(/\\bbook\\b/i, ''); }\n\nconst url = content.trim().match(/https?:\\/\\/\\S+/)?.[0] || null;\nconst text = url ? content.replace(url, '').trim() : content.trim();\n\nreturn [{ json: { ...item, _flags: flags, _url: url, _text: text, _hasAttachment: item._hasAttachment || false } }];"
+          "jsCode": "// COMMAND PARSER -- Extract flags + URL from message\n// All Phase 2 flags are parsed but currently no-op.\n// Shorthand: bare \"fr\", \"en\", etc. = translate to that language\n\nconst item = $input.first().json;\nconst message = item._message || '';\n\nconst flags = {\n  tts: false, translate: null, deep: false,\n  quick: false, transcript_only: false,\n  braindump: false, book: false, help: false, dub: null\n};\n\nlet content = message;\n\nif (/\\bhelp\\b/i.test(content)) { flags.help = true; }\nif (/\\btts\\b/i.test(content)) { flags.tts = true; content = content.replace(/\\btts\\b/i, ''); }\nif (/\\btranslate\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.translate = content.match(/translate\\s+(en|fr|nl|de|es)/i)[1].toLowerCase();\n  content = content.replace(/\\btranslate\\s+(en|fr|nl|de|es)\\b/i, '');\n}\nif (/\\bdub\\s+(en|fr|nl|de|es)\\b/i.test(content)) {\n  flags.dub = content.match(/dub\\s+(en|fr|nl|de|es)/i)[1].toLowerCase();\n  content = content.replace(/\\bdub\\s+(en|fr|nl|de|es)\\b/i, '');\n}\n// Shorthand: bare language code (fr, en, nl, de, es) = translate\n// Only if translate wasn't already set by \"translate <lang>\" above\nif (!flags.translate && /\\b(en|fr|nl|de|es)\\b/i.test(content)) {\n  const langMatch = content.match(/\\b(en|fr|nl|de|es)\\b/i);\n  // Make sure it's not part of a URL (check it's not preceded by / or .)\n  const idx = content.indexOf(langMatch[0]);\n  const before = idx > 0 ? content[idx - 1] : ' ';\n  if (before !== '/' && before !== '.') {\n    flags.translate = langMatch[1].toLowerCase();\n    content = content.replace(new RegExp('\\\\b' + langMatch[1] + '\\\\b', 'i'), '');\n  }\n}\nif (/\\bdeep\\b/i.test(content)) { flags.deep = true; content = content.replace(/\\bdeep\\b/i, ''); }\nif (/\\bquick\\b/i.test(content)) { flags.quick = true; content = content.replace(/\\bquick\\b/i, ''); }\nif (/\\btranscript\\b/i.test(content)) { flags.transcript_only = true; content = content.replace(/\\btranscript\\b/i, ''); }\nif (/\\bbraindump\\b/i.test(content)) { flags.braindump = true; content = content.replace(/\\bbraindump\\b/i, ''); }\nif (/\\bbook\\b/i.test(content)) { flags.book = true; content = content.replace(/\\bbook\\b/i, ''); }\n\nconst url = content.trim().match(/https?:\\/\\/\\S+/)?.[0] || null;\nconst text = url ? content.replace(url, '').trim() : content.trim();\n\nreturn [{ json: { ...item, _flags: flags, _url: url, _text: text, _hasAttachment: item._hasAttachment || false } }];"
         },
         "name": "Command Parser",
         "type": "n8n-nodes-base.code",
@@ -1991,51 +1991,11 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-02-22T17:59:29.188Z",
-        "id": 248,
+        "createdAt": "2026-03-04T09:53:32.598Z",
+        "id": 623,
         "workflowId": "G8P8MN81WrYqmhqB",
         "versionId": "YOUR_UUID",
         "event": "activated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-22T17:59:29.282Z",
-        "id": 250,
-        "workflowId": "G8P8MN81WrYqmhqB",
-        "versionId": "YOUR_UUID",
-        "event": "activated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-27T10:35:40.920Z",
-        "id": 549,
-        "workflowId": "G8P8MN81WrYqmhqB",
-        "versionId": "YOUR_UUID",
-        "event": "activated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-22T17:59:29.160Z",
-        "id": 247,
-        "workflowId": "G8P8MN81WrYqmhqB",
-        "versionId": "YOUR_UUID",
-        "event": "deactivated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-22T17:59:29.231Z",
-        "id": 249,
-        "workflowId": "G8P8MN81WrYqmhqB",
-        "versionId": "YOUR_UUID",
-        "event": "deactivated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-27T10:35:40.882Z",
-        "id": 548,
-        "workflowId": "G8P8MN81WrYqmhqB",
-        "versionId": "YOUR_UUID",
-        "event": "deactivated",
         "userId": "YOUR_UUID"
       }
     ]
