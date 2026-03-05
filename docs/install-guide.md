@@ -156,8 +156,17 @@ Import the workflows in this order:
 
 In n8n, go to Workflows > Import from File for each JSON file from the `workflows/` directory.
 
-After importing, open each workflow and verify:
-- All credential nodes show the correct credential (no red "credential missing" warnings)
+After importing, open each workflow and **re-link credentials manually**:
+
+1. Open the workflow in the n8n editor
+2. Click on each PostgreSQL node (they will show a red "credential missing" warning)
+3. Select "Postgres Signal" from the credential dropdown
+4. Save the workflow
+
+> **Why:** Sanitized workflow files contain placeholder credential IDs that do not exist on your instance. The n8n UI import preserves these invalid references, so you must re-link each credential node to your local "Postgres Signal" credential.
+
+Verify after re-linking:
+- All credential nodes show green (no warnings)
 - The PostgreSQL nodes point to "Postgres Signal"
 
 > **Note:** Do not activate the workflows yet. Complete the smoke test first.
