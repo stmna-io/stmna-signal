@@ -177,17 +177,18 @@ Pipeline/
   Processed/   ← pipeline moves files here after processing
 ```
 
-Verify WebDAV access from the n8n container:
+Verify WebDAV access from the host:
 
 ```bash
-podman exec n8n wget -q -O- \
-  --method=PROPFIND \
-  --header='Depth: 1' \
-  --header='Authorization: Basic BASE64_CREDENTIALS' \
-  'http://nextcloud/remote.php/webdav/'
+curl -s -X PROPFIND \
+  -H 'Depth: 1' \
+  -H 'Authorization: Basic BASE64_CREDENTIALS' \
+  'http://localhost:8090/remote.php/webdav/' | head -5
 ```
 
 > **Note:** Generate `BASE64_CREDENTIALS` with: `echo -n 'mcp-bot:YOUR_PASSWORD' | base64`
+
+> **Note:** This verification runs from the host, not inside the n8n container. BusyBox wget (used in n8n's Alpine image) does not support custom HTTP methods like PROPFIND.
 
 **Expected result:** An XML response listing the root directory contents.
 
@@ -316,35 +317,39 @@ curl -s http://localhost:8080/v1/receive
 
 ### Test 3: NextCloud WebDAV
 
-Upload a test file from the n8n container:
+Upload a test file via WebDAV:
 
 ```bash
-podman exec n8n wget -q -O- \
-  --method=PUT \
-  --header='Authorization: Basic BASE64_CREDENTIALS' \
-  --body-data='test content' \
-  'http://nextcloud/remote.php/webdav/Pipeline/Incoming/test.txt'
+curl -s -X PUT \
+  -H 'Authorization: Basic BASE64_CREDENTIALS' \
+  -d 'test content' \
+  'http://localhost:8090/remote.php/webdav/Pipeline/Incoming/test.txt' \
+  -o /dev/null -w "%{http_code}"
 ```
 
-**Expected result:** No output (HTTP 201 Created). Verify the file appears in NextCloud web UI.
+**Expected result:** `201` (HTTP Created). Verify the file appears in NextCloud web UI.
 
 ### Test 4: Whisper connectivity
 
-Verify the Whisper-signal instance (used for YouTube/podcast transcription) is reachable from n8n:
+Verify the Whisper-signal instance (used for YouTube/podcast transcription) is reachable:
 
 ```bash
-podman exec n8n wget -q -O- 'http://whisper-signal:8084/v1/models'
+curl -s http://localhost:8084/v1/models
 ```
+
+> **Note:** This runs from the host using the published port. The n8n container reaches the same service via `http://whisper-signal:8084` on the internal `stmna-net` network.
 
 **Expected result:** A JSON response listing the loaded model.
 
 ### Test 5: Crawl4AI connectivity
 
-Verify Crawl4AI is reachable from n8n:
+Verify Crawl4AI is reachable:
 
 ```bash
-podman exec n8n wget -q -O- 'http://crawl4ai:11235/health'
+curl -s http://localhost:11235/health
 ```
+
+> **Note:** This runs from the host using the published port. The n8n container reaches the same service via `http://crawl4ai:11235` on the internal `stmna-net` network.
 
 **Expected result:** A JSON response indicating the service is healthy.
 
