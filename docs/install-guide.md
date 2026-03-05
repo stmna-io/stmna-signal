@@ -1,7 +1,7 @@
 ---
 title: "STMNA Signal Install Guide"
 repo: stmna-signal
-prereq: "stmna-desk install guide sections 1-7"
+prereq: "stmna-desk install guide, Core + Automation tiers"
 validated: staging
 updated: 2026-03-05
 ---
@@ -16,11 +16,13 @@ updated: 2026-03-05
 
 | Requirement | Where to get it |
 |-------------|----------------|
-| STMNA Desk stack (Steps 1-7) | [Desk install guide](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md) |
+| STMNA Desk, Core + Automation tiers (Steps 1-8) | [Desk install guide](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md) |
+| STMNA Desk, Kokoro TTS (Step 10) -- for audio summaries | [Desk install guide, Step 10](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md#step-10-kokoro-tts-text-to-speech) |
+| STMNA Desk, Forgejo (Step 11) -- for vault git sync | [Desk install guide, Step 11](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md#step-11-forgejo-git-hosting) |
 | PostgreSQL running with `stmna_signal` database | Desk install guide, Step 4 |
 | n8n running with custom image | Desk install guide, Step 7 |
 | llama-swap running with at least one LLM | Desk install guide, Step 5 |
-| Whisper server running | Desk install guide, Step 6 |
+| Whisper server running | Desk install guide, Step 8 |
 | A Signal account on your phone | [signal.org](https://signal.org) |
 
 If installing on other infrastructure: see [Running on Other Infrastructure](#running-on-other-infrastructure) below.
@@ -98,7 +100,99 @@ curl -s http://localhost:8080/v1/about
 
 ---
 
-## Step 2: Apply the Database Schema
+## Step 2: Deploy NextCloud
+
+NextCloud provides file storage with a WebDAV API. The Signal pipeline uses it for incoming file drops (books, documents) and delivering audio summaries.
+
+In Dockge, create a new stack named `nextcloud`:
+
+```yaml
+# ============================================================
+# STMNA Signal -- NextCloud (Sovereign Cloud Storage)
+# Part of: stmna-signal install guide, Step 2
+# Requires: stmna-net network
+# ============================================================
+
+x-podman:
+  in_pod: false
+
+services:
+  nextcloud:
+    # INFO: Sovereign cloud storage with WebDAV API for n8n file operations
+    image: docker.io/library/nextcloud:30-apache
+    container_name: nextcloud
+    restart: always
+    ports:
+      # OPTIONAL -- change host port if 8090 conflicts
+      - "8090:80"
+    volumes:
+      # NO ACTION NEEDED -- persistent data (files, config, database)
+      - /home/stmna/data/nextcloud:/var/www/html
+    environment:
+      # USER INPUT REQUIRED -- admin credentials (set on first run only, ignored after)
+      - NEXTCLOUD_ADMIN_USER=admin
+      - NEXTCLOUD_ADMIN_PASSWORD=YOUR_ADMIN_PASSWORD_HERE
+      # NO ACTION NEEDED -- use built-in SQLite (sufficient for single-user/small-team)
+      - SQLITE_DATABASE=nextcloud
+      # USER INPUT REQUIRED -- your server's domain or IP (for trusted domains)
+      # NOTE -- "nextcloud" is the container hostname, needed for n8n WebDAV access via stmna-net
+      - NEXTCLOUD_TRUSTED_DOMAINS=YOUR_IP localhost nextcloud
+      # OPTIONAL -- disable HTTPS enforcement for LAN-only access
+      - OVERWRITEPROTOCOL=http
+    networks:
+      - default
+      - stmna-net
+
+networks:
+  default: {}
+  stmna-net:
+    external: true
+```
+
+> **Required:** Set `NEXTCLOUD_ADMIN_PASSWORD` to a strong password. Generate one with `openssl rand -hex 16`.
+
+> **Required:** Set `NEXTCLOUD_TRUSTED_DOMAINS` to your server's IP or domain (e.g., `10.0.10.54 localhost`). NextCloud rejects requests from untrusted domains.
+
+**Expected result:** NextCloud is accessible at `http://YOUR_IP:8090`. Log in with the admin credentials you set above.
+
+### Create the mcp-bot user
+
+The Signal pipeline accesses NextCloud via WebDAV using a dedicated service account.
+
+1. Log in to NextCloud as admin
+2. Go to Users (top-right menu > Users)
+3. Click "New user"
+4. Username: `mcp-bot`, set a strong password
+5. Save the password -- you will need it for n8n credential configuration
+
+### Create the pipeline folder structure
+
+1. Log in as `mcp-bot` (or create a shared folder as admin and share it with `mcp-bot`)
+2. Create the following folder structure:
+
+```
+Pipeline/
+  Incoming/    ← drop files here for processing
+  Processed/   ← pipeline moves files here after processing
+```
+
+Verify WebDAV access from the n8n container:
+
+```bash
+podman exec n8n wget -q -O- \
+  --method=PROPFIND \
+  --header='Depth: 1' \
+  --header='Authorization: Basic BASE64_CREDENTIALS' \
+  'http://nextcloud/remote.php/webdav/'
+```
+
+> **Note:** Generate `BASE64_CREDENTIALS` with: `echo -n 'mcp-bot:YOUR_PASSWORD' | base64`
+
+**Expected result:** An XML response listing the root directory contents.
+
+---
+
+## Step 3: Apply the Database Schema
 
 The Signal pipeline uses four PostgreSQL tables: `pipeline_users`, `pipeline_queue`, `content_cache`, and `content_variants`.
 
@@ -130,7 +224,7 @@ podman exec postgres-voice psql -U voice -d stmna_signal -c "\dt"
 
 ---
 
-## Step 3: Configure n8n Credentials
+## Step 4: Configure n8n Credentials
 
 Open n8n at `http://YOUR_IP:5678` and create the following credentials. Go to Settings > Credentials > Add Credential for each.
 
@@ -138,14 +232,15 @@ Open n8n at `http://YOUR_IP:5678` and create the following credentials. Go to Se
 |----------------|------|--------|
 | Postgres Signal | PostgreSQL | Host: `postgres-voice`, Port: `5432`, Database: `stmna_signal`, User: `voice`, Password: your postgres password |
 | Signal API | HTTP Header Auth | Name: `Authorization`, Value: (leave empty unless you set an API key on signal-cli) |
+| NextCloud account | WebDAV | Base URL: `http://nextcloud/remote.php/webdav/`, User: `mcp-bot`, Password: your mcp-bot password |
 
 > **Required:** The credential name "Postgres Signal" must match exactly. The workflows reference credentials by name.
 
-> **Note:** Additional credentials are needed for optional features: NextCloud account (for file ingestion), Kokoro TTS runs without credentials (HTTP calls within the container network).
+> **Note:** Kokoro TTS runs without credentials (HTTP calls within the container network).
 
 ---
 
-## Step 4: Import Workflows
+## Step 5: Import Workflows
 
 Import the workflows in this order:
 
@@ -173,7 +268,7 @@ Verify after re-linking:
 
 ---
 
-## Step 5: Smoke Test
+## Step 6: Smoke Test
 
 ### Test 1: Database connectivity
 
@@ -189,7 +284,21 @@ curl -s http://localhost:8080/v1/receive
 
 **Expected result:** A JSON array containing your test message.
 
-### Test 3: Full pipeline (manual trigger)
+### Test 3: NextCloud WebDAV
+
+Upload a test file from the n8n container:
+
+```bash
+podman exec n8n wget -q -O- \
+  --method=PUT \
+  --header='Authorization: Basic BASE64_CREDENTIALS' \
+  --body-data='test content' \
+  'http://nextcloud/remote.php/webdav/Pipeline/Incoming/test.txt'
+```
+
+**Expected result:** No output (HTTP 201 Created). Verify the file appears in NextCloud web UI.
+
+### Test 4: Full pipeline (manual trigger)
 
 Insert a test job directly into the queue:
 
@@ -227,6 +336,18 @@ podman network inspect stmna-net | grep -E '"Name"'
 
 Both `n8n` and `postgres-voice` should appear in the output.
 
+### NextCloud: "Access through untrusted domain"
+
+**Cause:** You are accessing NextCloud via an IP or domain not listed in `NEXTCLOUD_TRUSTED_DOMAINS`.
+
+**Fix:** Update `NEXTCLOUD_TRUSTED_DOMAINS` in the compose file to include the IP or domain you are using. Restart the stack.
+
+### NextCloud: WebDAV returns 401 Unauthorized
+
+**Cause:** The mcp-bot credentials are wrong, or the user does not exist.
+
+**Fix:** Verify the credentials by logging into the NextCloud web UI as `mcp-bot`. Check the password matches what you configured in the n8n NextCloud credential.
+
 ### Workflow import error: "request/body must NOT have additional properties"
 
 **Cause:** The n8n API rejects workflow JSON files that contain extra fields (e.g., `active`, `isArchived`, `staticData`).
@@ -245,6 +366,7 @@ This guide is written and tested against STMNA Desk. If running on other infrast
 | Whisper server (local transcription) | Any Whisper-compatible API (OpenAI Whisper API, Groq). Update the Whisper Transcribe node URLs. |
 | Kokoro TTS (local text-to-speech) | Any OpenAI-compatible TTS endpoint. Update the TTS Generate Audio node URL. |
 | PostgreSQL with PGVector | Any PostgreSQL 15+ instance with the `vector` extension. |
+| NextCloud (file drops) | Any WebDAV-compatible storage. Update the WebDAV URLs in Signal_NextCloud workflow. |
 | signal-cli-rest-api | Same image works anywhere. Just needs a linked Signal account. |
 
 This path is community-supported. The STMNA team validates against Desk only.
