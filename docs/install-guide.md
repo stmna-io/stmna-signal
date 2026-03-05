@@ -23,6 +23,7 @@ updated: 2026-03-05
 | n8n running with custom image | Desk install guide, Step 7 |
 | llama-swap running with at least one LLM | Desk install guide, Step 5 |
 | Whisper server running | Desk install guide, Step 8 |
+| Crawl4AI running -- for web article scraping | [Desk install guide, Step 13](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md#step-13-crawl4ai-web-scraping) |
 | A Signal account on your phone | [signal.org](https://signal.org) |
 
 If installing on other infrastructure: see [Running on Other Infrastructure](#running-on-other-infrastructure) below.
@@ -298,7 +299,27 @@ podman exec n8n wget -q -O- \
 
 **Expected result:** No output (HTTP 201 Created). Verify the file appears in NextCloud web UI.
 
-### Test 4: Full pipeline (manual trigger)
+### Test 4: Whisper connectivity
+
+Verify the Whisper-signal instance (used for YouTube/podcast transcription) is reachable from n8n:
+
+```bash
+podman exec n8n wget -q -O- 'http://whisper-signal:8084/v1/models'
+```
+
+**Expected result:** A JSON response listing the loaded model.
+
+### Test 5: Crawl4AI connectivity
+
+Verify Crawl4AI is reachable from n8n:
+
+```bash
+podman exec n8n wget -q -O- 'http://crawl4ai:11235/health'
+```
+
+**Expected result:** A JSON response indicating the service is healthy.
+
+### Test 6: Full pipeline (manual trigger)
 
 Insert a test job directly into the queue:
 
