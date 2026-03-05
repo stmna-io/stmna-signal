@@ -218,3 +218,71 @@ These workflows were built for a specific hardware stack (AMD Strix Halo, 128GB 
 - The pipeline is modular: each workflow is independently testable via its trigger
 
 For the full architecture reference, see the [Signal Pipeline PRD](https://github.com/stmna-io/stmna-signal) in the project documentation.
+
+---
+
+## n8n Code Node Patterns
+
+The Signal Worker uses n8n Code nodes for LLM calls and file operations. These patterns are required due to n8n sandbox limitations.
+
+### LLM calls: use spawn, not execFileSync
+
+n8n Code nodes run in a sandboxed task runner. For HTTP calls that take longer than 60 seconds (LLM inference), you must use `child_process.spawn` wrapped in a Promise. `execFileSync` blocks the event loop and causes heartbeat failures.
+
+```javascript
+// CORRECT: async spawn pattern for LLM calls
+const { spawn } = require('child_process');
+const result = await new Promise((resolve, reject) => {
+  const chunks = [];
+  const proc = spawn('wget', ['-q', '-O-', '--post-data=...', 'http://llama-swap:8080/v1/chat/completions']);
+  proc.stdout.on('data', d => chunks.push(d));
+  proc.stderr.on('data', () => {});
+  proc.on('close', code => code === 0 ? resolve(Buffer.concat(chunks).toString()) : reject(new Error(`wget failed: ${code}`)));
+});
+```
+
+> **Warning:** `this.helpers.httpRequest` hangs after the first sequential LLM call in the same Code node. Do not use it for LLM inference.
+
+### Binary file uploads: use spawn('node', ...)
+
+n8n's `this.helpers.httpRequest` JSON-serializes Buffer objects through the task runner IPC, producing `{"type":"Buffer","data":[...]}` instead of raw bytes. For WebDAV PUT (e.g., uploading MP3 to NextCloud), use a spawned Node.js subprocess:
+
+```javascript
+const script = `
+const http = require('http');
+const fs = require('fs');
+const data = fs.readFileSync('/tmp/audio.mp3');
+const req = http.request({hostname:'nextcloud',port:80,path:'/remote.php/webdav/...',method:'PUT',
+  headers:{'Authorization':'Basic ...','Content-Length':data.length}}, res => {
+  process.exit(res.statusCode < 300 ? 0 : 1);
+});
+req.write(data);
+req.end();
+`;
+await new Promise((resolve, reject) => {
+  const proc = spawn('node', ['-e', script]);
+  proc.on('close', code => code === 0 ? resolve() : reject(new Error('Upload failed')));
+});
+```
+
+### File I/O: use fs, not Write Binary File node
+
+The n8n Write Binary File node cannot write to `/tmp/`. Use the `fs` module directly in Code nodes:
+
+```javascript
+const fs = require('fs');
+fs.writeFileSync('/tmp/output.mp3', buffer);
+```
+
+### Available tools in n8n container
+
+The custom n8n image (Alpine-based BusyBox) has: `wget`, `node`, `npx`, `ffmpeg`, `yt-dlp`, `pandoc`, `python3`. It does **not** have `curl`.
+
+### Crypto: use sha256sum, not require('crypto')
+
+The n8n sandbox blocks `require('crypto')`. Use the system command instead:
+
+```javascript
+const { execFileSync } = require('child_process');
+const hash = execFileSync('sha256sum', { input: content }).toString().split(' ')[0];
+```

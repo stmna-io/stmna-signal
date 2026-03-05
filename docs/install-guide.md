@@ -239,6 +239,35 @@ Open n8n at `http://YOUR_IP:5678` and create the following credentials. Go to Se
 
 > **Note:** Kokoro TTS runs without credentials (HTTP calls within the container network).
 
+### Configure Git access for vault writes
+
+The Signal Worker writes processed notes to a Git repository on Forgejo. This requires a Personal Access Token (PAT) for HTTPS authentication.
+
+1. In Forgejo, go to your user Settings > Applications > Generate New Token
+2. Token name: `n8n-vault` (or any name)
+3. Permissions: `repository: Read and Write`
+4. Copy the token -- you cannot view it again after creation
+
+5. Configure the Git remote inside the n8n container. The vault directory must be a Git repository cloned from Forgejo:
+
+```bash
+# Mount your output directory as /vault in the n8n compose file first (see Desk Step 7)
+# Then clone the repo into that directory:
+cd /path/to/your/output/directory
+git clone https://YOUR_FORGEJO_USER:YOUR_TOKEN@YOUR_IP:3300/YOUR_ORG/YOUR_REPO.git .
+```
+
+6. Set the Git safe directory inside the n8n container:
+
+```bash
+podman exec n8n sh -c 'mkdir -p /home/node/.n8n && echo "[safe]
+	directory = /vault" > /home/node/.n8n/.gitconfig'
+```
+
+> **Note:** The PAT is embedded in the Git remote URL. This is standard for containerized Git access where SSH key management adds unnecessary complexity.
+
+> **Note:** The `safe.directory` setting is required because `/vault` is owned by a different UID than the `node` user inside the container.
+
 ---
 
 ## Step 5: Import Workflows
