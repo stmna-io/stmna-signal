@@ -6,10 +6,10 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## INGESTION\n\nSignal polling (every 5s) + Webhook entry point.\nBoth paths normalize to unified message format.\n\nSchedule Trigger > Poll Signal > Filter Empty > Split > Normalize\nWebhook Trigger > Normalize",
+        "content": "## Ingestion\n\nPolls signal-rest-api every 5s and accepts webhook POSTs. Normalizes both sources into a unified message format with sender, content, timestamp, and attachments.",
         "height": 500,
         "width": 1300,
-        "color": 2
+        "color": "#4c6ef5"
       },
       "name": "Section: INGESTION",
       "type": "n8n-nodes-base.stickyNote",
@@ -22,10 +22,10 @@
     },
     {
       "parameters": {
-        "content": "## COMMAND PARSER\n\nExtracts flags (quick, deep, help, etc.) and URL from message.\nRoutes help requests to Help Response.",
+        "content": "## Command Parser\n\nExtracts flags (_translate, _tts, _audio) from message text. Routes /help commands to the help response flow.",
         "height": 500,
         "width": 500,
-        "color": 3
+        "color": "#4c6ef5"
       },
       "name": "Section: COMMAND PARSER",
       "type": "n8n-nodes-base.stickyNote",
@@ -38,10 +38,10 @@
     },
     {
       "parameters": {
-        "content": "## IDENTITY & CONTENT KEY\n\nResolves sender identity via pipeline_users (UPSERT).\nNormalizes URL to content key for cache lookup.",
+        "content": "## Identity & Content Key\n\nResolves sender UUID to name/preferences via PostgreSQL. Normalizes content URLs into cache keys. Validates URL support (YouTube, web).",
         "height": 500,
         "width": 700,
-        "color": 4
+        "color": "#4c6ef5"
       },
       "name": "Section: IDENTITY",
       "type": "n8n-nodes-base.stickyNote",
@@ -54,10 +54,10 @@
     },
     {
       "parameters": {
-        "content": "## CACHE CHECK & ROUTING\n\nChecks content_cache + content_variants for existing results.\nCache hit: serve immediately. Cache miss: queue job.",
+        "content": "## Cache & Routing\n\nChecks PostgreSQL cache for existing summaries. Serves cached results instantly or queues new jobs for Signal_Worker. Braindumps get a separate queue path.",
         "height": 700,
         "width": 1200,
-        "color": 5
+        "color": "#4c6ef5"
       },
       "name": "Section: CACHE & ROUTING",
       "type": "n8n-nodes-base.stickyNote",
@@ -70,10 +70,10 @@
     },
     {
       "parameters": {
-        "content": "## ERROR HANDLING\n\nCatches pipeline failures, formats user-friendly error message,\nsends back via Signal.",
+        "content": "## Error Handling\n\nCatches processing errors, formats user-friendly messages, and sends them back via Signal REST API.",
         "height": 300,
         "width": 500,
-        "color": 6
+        "color": "#4c6ef5"
       },
       "name": "Section: ERROR HANDLING",
       "type": "n8n-nodes-base.stickyNote",
@@ -254,7 +254,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// HELP RESPONSE — Returns command list with Unicode bold headers\n\n// Unicode Bold converter (Mathematical Bold Sans-Serif)\nfunction toBold(text) {\n  const boldMap = {};\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D5D4 + i);\n  }\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D5EE + i);\n  }\n  for (let i = 0; i < 10; i++) {\n    boldMap[String.fromCharCode(48 + i)] = String.fromCodePoint(0x1D7EC + i);\n  }\n  return text.split('').map(c => boldMap[c] || c).join('');\n}\n\nconst helpText = [\n  toBold('Welcome to STMNA Signal!'),\n  '',\n  'Send any YouTube, web page, link to PDF or post on X and get summarized content back!',\n  '',\n  'Jobs are processed at night and results will be shared with you next day at 08:00AM.',\n  '',\n  toBold('Bot Commands:'),\n  '',\n  '(no flag) - Full summary + vault save',\n  'quick - Fast summary, Signal only (no vault)',\n  'deep - Extended detailed analysis',\n  'help - This command list',\n  '',\n  toBold('Coming soon:'),\n  '',\n  'transcript - Transcription only',\n  'braindump - Structure text to vault',\n  'tts - Audio version of summary',\n  'translate [lang] - Translate summary',\n  'dub [lang] - Dubbed video',\n  '',\n  toBold('Examples:'),\n  'https://youtube.com/watch?v=abc',\n  'quick https://article.com/post',\n  'deep https://github.com/user/repo'\n].join('\\n');\n\nreturn [{ json: { ...$input.first().json, _response: helpText, _skipVault: true } }];"
+        "jsCode": "// HELP RESPONSE \u2014 Returns command list with Unicode bold headers\n\n// Unicode Bold converter (Mathematical Bold Sans-Serif)\nfunction toBold(text) {\n  const boldMap = {};\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D5D4 + i);\n  }\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D5EE + i);\n  }\n  for (let i = 0; i < 10; i++) {\n    boldMap[String.fromCharCode(48 + i)] = String.fromCodePoint(0x1D7EC + i);\n  }\n  return text.split('').map(c => boldMap[c] || c).join('');\n}\n\nconst helpText = [\n  toBold('Welcome to STMNA Signal!'),\n  '',\n  'Send any YouTube, web page, link to PDF or post on X and get summarized content back!',\n  '',\n  'Jobs are processed at night and results will be shared with you next day at 08:00AM.',\n  '',\n  toBold('Bot Commands:'),\n  '',\n  '(no flag) - Full summary + vault save',\n  'quick - Fast summary, Signal only (no vault)',\n  'deep - Extended detailed analysis',\n  'help - This command list',\n  '',\n  toBold('Coming soon:'),\n  '',\n  'transcript - Transcription only',\n  'braindump - Structure text to vault',\n  'tts - Audio version of summary',\n  'translate [lang] - Translate summary',\n  'dub [lang] - Dubbed video',\n  '',\n  toBold('Examples:'),\n  'https://youtube.com/watch?v=abc',\n  'quick https://article.com/post',\n  'deep https://github.com/user/repo'\n].join('\\n');\n\nreturn [{ json: { ...$input.first().json, _response: helpText, _skipVault: true } }];"
       },
       "name": "Help Response",
       "type": "n8n-nodes-base.code",
@@ -311,7 +311,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// NORMALIZE CONTENT KEY\n// Extracts a stable, cache-friendly key from the URL.\n// YouTube: video ID (11 chars). Web: cleaned URL without tracking params.\n// Also determines _contentType for downstream routing.\n// UPDATED: Phase 1D — Added X/Twitter, GitHub, PDF, Spotify, Tidal detection\n//          + braindump/voice-note detection for no-URL messages\n\nconst item = $('Command Parser').first().json;\nconst url = item._url || '';\n\n// Attach identity from the Resolve Identity node\nconst identityData = $('Resolve Identity').first().json;\nconst userId = identityData?.id || null;\nconst userRole = identityData?.role || 'user';\nconst userName = identityData?.name || 'Unknown';\n\nlet contentKey = '';\nlet contentType = '';\n\nif (!url) {\n  // No URL — check for voice note attachment or braindump text\n  const isVoiceNote = item._hasAttachment && (item._attachmentType || '').startsWith('audio/');\n  const isBraindump = (item._flags?.braindump === true) || (!isVoiceNote && item._text && item._text.length > 0);\n\n  return [{ json: {\n    ...item,\n    _userId: userId,\n    _userRole: userRole,\n    _userName: userName,\n    _contentKey: '',\n    _contentType: isVoiceNote ? 'voice-note' : (isBraindump ? 'braindump' : 'none')\n  }}];\n}\n\n// ---- YOUTUBE ----\nconst ytPatterns = [\n  /(?:youtube\\.com\\/watch\\?.*v=)([a-zA-Z0-9_-]{11})/,\n  /(?:youtu\\.be\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/live\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]{11})/\n];\nfor (const pattern of ytPatterns) {\n  const match = url.match(pattern);\n  if (match) {\n    contentKey = `yt:${match[1]}`;\n    contentType = 'youtube';\n    break;\n  }\n}\n\n// ---- X/TWITTER ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(x\\.com|twitter\\.com)\\//i.test(url)) {\n  contentType = 'x-post';\n}\n\n// ---- GITHUB/GITLAB ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(github\\.com|gitlab\\.com)\\//i.test(url)) {\n  contentType = 'github';\n}\n\n// ---- PDF (URL ending in .pdf) ----\nif (!contentType && /\\.pdf(\\?|#|$)/i.test(url)) {\n  contentType = 'paper';\n}\n\n// ---- SPOTIFY ----\nif (!contentType && /^https?:\\/\\/open\\.spotify\\.com\\//i.test(url)) {\n  contentType = 'spotify';\n}\n\n// ---- TIDAL ----\nif (!contentType && /^https?:\\/\\/(www\\.)?tidal\\.com\\//i.test(url)) {\n  contentType = 'tidal';\n}\n\n// ---- WEB (fallback) ----\nif (!contentType) {\n  contentType = 'web';\n}\n\n// Build content key for all URL-based types (except YouTube, already set above)\nif (!contentKey) {\n  try {\n    const parsed = new URL(url);\n    const trackingParams = [\n      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',\n      'fbclid', 'gclid', 'ref', 'ref_src', 'ref_url',\n      'mc_cid', 'mc_eid', 's', 'si'\n    ];\n    for (const param of trackingParams) {\n      parsed.searchParams.delete(param);\n    }\n    const hostPath = parsed.hostname.toLowerCase() + parsed.pathname.replace(/\\/$/, '');\n    const query = parsed.searchParams.toString() ? '?' + parsed.searchParams.toString() : '';\n    const hash = parsed.hash || '';\n    contentKey = `web:${hostPath}${query}${hash}`;\n  } catch (e) {\n    contentKey = `web:${url.replace(/^https?:\\/\\//, '').replace(/\\/$/, '')}`;\n  }\n}\n\nreturn [{ json: {\n  ...item,\n  _userId: userId,\n  _userRole: userRole,\n  _userName: userName,\n  _contentKey: contentKey,\n  _contentType: contentType\n}}];\n"
+        "jsCode": "// NORMALIZE CONTENT KEY\n// Extracts a stable, cache-friendly key from the URL.\n// YouTube: video ID (11 chars). Web: cleaned URL without tracking params.\n// Also determines _contentType for downstream routing.\n// UPDATED: Phase 1D \u2014 Added X/Twitter, GitHub, PDF, Spotify, Tidal detection\n//          + braindump/voice-note detection for no-URL messages\n\nconst item = $('Command Parser').first().json;\nconst url = item._url || '';\n\n// Attach identity from the Resolve Identity node\nconst identityData = $('Resolve Identity').first().json;\nconst userId = identityData?.id || null;\nconst userRole = identityData?.role || 'user';\nconst userName = identityData?.name || 'Unknown';\n\nlet contentKey = '';\nlet contentType = '';\n\nif (!url) {\n  // No URL \u2014 check for voice note attachment or braindump text\n  const isVoiceNote = item._hasAttachment && (item._attachmentType || '').startsWith('audio/');\n  const isBraindump = (item._flags?.braindump === true) || (!isVoiceNote && item._text && item._text.length > 0);\n\n  return [{ json: {\n    ...item,\n    _userId: userId,\n    _userRole: userRole,\n    _userName: userName,\n    _contentKey: '',\n    _contentType: isVoiceNote ? 'voice-note' : (isBraindump ? 'braindump' : 'none')\n  }}];\n}\n\n// ---- YOUTUBE ----\nconst ytPatterns = [\n  /(?:youtube\\.com\\/watch\\?.*v=)([a-zA-Z0-9_-]{11})/,\n  /(?:youtu\\.be\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/live\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]{11})/\n];\nfor (const pattern of ytPatterns) {\n  const match = url.match(pattern);\n  if (match) {\n    contentKey = `yt:${match[1]}`;\n    contentType = 'youtube';\n    break;\n  }\n}\n\n// ---- X/TWITTER ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(x\\.com|twitter\\.com)\\//i.test(url)) {\n  contentType = 'x-post';\n}\n\n// ---- GITHUB/GITLAB ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(github\\.com|gitlab\\.com)\\//i.test(url)) {\n  contentType = 'github';\n}\n\n// ---- PDF (URL ending in .pdf) ----\nif (!contentType && /\\.pdf(\\?|#|$)/i.test(url)) {\n  contentType = 'paper';\n}\n\n// ---- SPOTIFY ----\nif (!contentType && /^https?:\\/\\/open\\.spotify\\.com\\//i.test(url)) {\n  contentType = 'spotify';\n}\n\n// ---- TIDAL ----\nif (!contentType && /^https?:\\/\\/(www\\.)?tidal\\.com\\//i.test(url)) {\n  contentType = 'tidal';\n}\n\n// ---- WEB (fallback) ----\nif (!contentType) {\n  contentType = 'web';\n}\n\n// Build content key for all URL-based types (except YouTube, already set above)\nif (!contentKey) {\n  try {\n    const parsed = new URL(url);\n    const trackingParams = [\n      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',\n      'fbclid', 'gclid', 'ref', 'ref_src', 'ref_url',\n      'mc_cid', 'mc_eid', 's', 'si'\n    ];\n    for (const param of trackingParams) {\n      parsed.searchParams.delete(param);\n    }\n    const hostPath = parsed.hostname.toLowerCase() + parsed.pathname.replace(/\\/$/, '');\n    const query = parsed.searchParams.toString() ? '?' + parsed.searchParams.toString() : '';\n    const hash = parsed.hash || '';\n    contentKey = `web:${hostPath}${query}${hash}`;\n  } catch (e) {\n    contentKey = `web:${url.replace(/^https?:\\/\\//, '').replace(/\\/$/, '')}`;\n  }\n}\n\nreturn [{ json: {\n  ...item,\n  _userId: userId,\n  _userRole: userRole,\n  _userName: userName,\n  _contentKey: contentKey,\n  _contentType: contentType\n}}];\n"
       },
       "name": "Normalize Content Key",
       "type": "n8n-nodes-base.code",
@@ -383,7 +383,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// CHECK CACHE HIT — Routes based on Cache Check PostgreSQL result\n// The Cache Check node returns the cached row if found, empty object if not.\n// We check if content_key exists and is non-empty.\nconst cacheResult = $input.first().json;\nconst hasCacheHit = !!(cacheResult && cacheResult.content_key && cacheResult.content_key.length > 0);\n\nreturn [{ json: { ...cacheResult, _hasCacheHit: hasCacheHit } }];"
+        "jsCode": "// CHECK CACHE HIT \u2014 Routes based on Cache Check PostgreSQL result\n// The Cache Check node returns the cached row if found, empty object if not.\n// We check if content_key exists and is non-empty.\nconst cacheResult = $input.first().json;\nconst hasCacheHit = !!(cacheResult && cacheResult.content_key && cacheResult.content_key.length > 0);\n\nreturn [{ json: { ...cacheResult, _hasCacheHit: hasCacheHit } }];"
       },
       "name": "Check Cache Result",
       "type": "n8n-nodes-base.code",
@@ -454,7 +454,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// SEND ACK — Acknowledges queued job to sender\n// Admin: \"Getting details on [link]\"\n// User: \"Getting details on [link] + ready tomorrow morning\"\n\nconst item = $('Normalize Content Key').first().json;\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\nconst url = item._url || '';\n\nlet response = '';\n\nif (isAdmin) {\n  response = `\\ud83d\\udd0d Getting details on ${url}`;\n} else {\n  response = `\\ud83d\\udd0d Getting details on ${url}\\n\\nReady for you tomorrow first thing in the morning!`;\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+        "jsCode": "// SEND ACK \u2014 Acknowledges queued job to sender\n// Admin: \"Getting details on [link]\"\n// User: \"Getting details on [link] + ready tomorrow morning\"\n\nconst item = $('Normalize Content Key').first().json;\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\nconst url = item._url || '';\n\nlet response = '';\n\nif (isAdmin) {\n  response = `\\ud83d\\udd0d Getting details on ${url}`;\n} else {\n  response = `\\ud83d\\udd0d Getting details on ${url}\\n\\nReady for you tomorrow first thing in the morning!`;\n}\n\nreturn [{ json: { ...item, _response: response } }];"
       },
       "name": "Send Ack",
       "type": "n8n-nodes-base.code",
@@ -607,7 +607,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// UNSUPPORTED RESPONSE — Spotify/Tidal \"coming soon\" + empty message handling\nconst item = $input.first().json;\nconst ct = item._contentType || 'none';\n\nlet response = '';\nif (ct === 'spotify') {\n  response = '\\u{1F3B5} Spotify support coming soon! For now, share the YouTube link if available.';\n} else if (ct === 'tidal') {\n  response = '\\u{1F3B5} Tidal support coming soon! For now, share the YouTube link if available.';\n} else {\n  // _contentType === 'none' — no URL, no text, no attachment\n  response = \"I didn't catch that. Send me a URL, a voice note, or text with the braindump flag.\\n\\nSend help for available commands.\";\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+        "jsCode": "// UNSUPPORTED RESPONSE \u2014 Spotify/Tidal \"coming soon\" + empty message handling\nconst item = $input.first().json;\nconst ct = item._contentType || 'none';\n\nlet response = '';\nif (ct === 'spotify') {\n  response = '\\u{1F3B5} Spotify support coming soon! For now, share the YouTube link if available.';\n} else if (ct === 'tidal') {\n  response = '\\u{1F3B5} Tidal support coming soon! For now, share the YouTube link if available.';\n} else {\n  // _contentType === 'none' \u2014 no URL, no text, no attachment\n  response = \"I didn't catch that. Send me a URL, a voice note, or text with the braindump flag.\\n\\nSend help for available commands.\";\n}\n\nreturn [{ json: { ...item, _response: response } }];"
       },
       "name": "Unsupported Response",
       "type": "n8n-nodes-base.code",
@@ -661,7 +661,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// BRAINDUMP/VOICE ACK — Acknowledge queued braindump or voice note\nconst item = $('Normalize Content Key').first().json;\nconst ct = item._contentType || 'braindump';\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\n\nlet response = '';\nif (ct === 'voice-note') {\n  response = '\\u{1F3A4} Transcribing your voice note...';\n} else {\n  response = '\\u{1F4DD} Structuring your braindump...';\n}\n\nif (!isAdmin) {\n  response += '\\n\\nReady for you tomorrow first thing in the morning!';\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+        "jsCode": "// BRAINDUMP/VOICE ACK \u2014 Acknowledge queued braindump or voice note\nconst item = $('Normalize Content Key').first().json;\nconst ct = item._contentType || 'braindump';\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\n\nlet response = '';\nif (ct === 'voice-note') {\n  response = '\\u{1F3A4} Transcribing your voice note...';\n} else {\n  response = '\\u{1F4DD} Structuring your braindump...';\n}\n\nif (!isAdmin) {\n  response += '\\n\\nReady for you tomorrow first thing in the morning!';\n}\n\nreturn [{ json: { ...item, _response: response } }];"
       },
       "name": "Braindump Ack",
       "type": "n8n-nodes-base.code",
@@ -691,6 +691,134 @@
         100
       ],
       "id": "YOUR_UUID"
+    },
+    {
+      "parameters": {
+        "content": "## Signal Ingestion\n\nFront door for the STMNA Signal pipeline. Polls signal-rest-api every 5s and accepts webhook POSTs. Normalizes messages, parses commands, resolves sender identity, checks content cache, and either serves cached results or queues jobs for Signal_Worker.\n\nTrigger: Schedule (5s poll) + Webhook POST\nOutput: Cached responses via Signal, or queued jobs in pipeline_queue",
+        "height": 240,
+        "width": 450,
+        "color": "#4c6ef5"
+      },
+      "id": "2148459f-ac6e-4ad1-8a9e-0e541a76540e",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -50,
+        -280
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n\n**Postgres Signal**\nResolves sender UUID to user profile.",
+        "height": 100,
+        "width": 240,
+        "color": "#e03e3e"
+      },
+      "id": "af5516c6-b096-4a30-866d-0cfcc9c20d2e",
+      "name": "Credential: Resolve Identity",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2100,
+        484
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n\n**Postgres Signal**\nChecks pipeline_cache for existing summaries.",
+        "height": 100,
+        "width": 240,
+        "color": "#e03e3e"
+      },
+      "id": "672272ad-8001-494e-9a0a-4641664c14cc",
+      "name": "Credential: Cache Check",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3200,
+        484
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n\n**Postgres Signal**\nInserts new processing jobs into pipeline_queue.",
+        "height": 100,
+        "width": 240,
+        "color": "#e03e3e"
+      },
+      "id": "d7bbdcea-304c-4411-bf78-b8d928b45af7",
+      "name": "Credential: Queue Job",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3800,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n\n**Postgres Signal**\nQueues braindump-type content separately.",
+        "height": 100,
+        "width": 240,
+        "color": "#e03e3e"
+      },
+      "id": "eff220dd-e01b-4558-ab8c-836ff1558268",
+      "name": "Credential: Queue Braindump",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2950,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## User Config\n\nSignal REST API base URL and phone number are hardcoded in Poll Signal API and all Send* nodes. Replace `YOUR_TAILSCALE_IP:8082` and `YOUR_PHONE_NUMBER` with your values.",
+        "height": 140,
+        "width": 320,
+        "color": "#f59f00"
+      },
+      "id": "9921e7fc-c387-4a8c-857d-035793741b79",
+      "name": "Config: Signal API",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1150
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## User Config\n\n`ADMIN_UUID` constant appears in Serve Cached, Send Ack, and Braindump Ack nodes. Set to your Signal user UUID for admin-level responses.",
+        "height": 120,
+        "width": 300,
+        "color": "#f59f00"
+      },
+      "id": "34c224e4-7b42-4ef9-b2f3-e01f52ac6dca",
+      "name": "Config: Admin UUID",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        340,
+        1150
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## User Config\n\n`forgejoBase` URL in Serve Cached node. Set to your Forgejo domain for vault file links in cached responses.",
+        "height": 100,
+        "width": 280,
+        "color": "#f59f00"
+      },
+      "id": "10198d9e-a06a-47b2-9453-330e7438c02e",
+      "name": "Config: Forgejo URL",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        680,
+        1150
+      ]
     }
   ],
   "connections": {
@@ -1254,7 +1382,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// HELP RESPONSE — Returns command list with Unicode bold headers\n\n// Unicode Bold converter (Mathematical Bold Sans-Serif)\nfunction toBold(text) {\n  const boldMap = {};\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D5D4 + i);\n  }\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D5EE + i);\n  }\n  for (let i = 0; i < 10; i++) {\n    boldMap[String.fromCharCode(48 + i)] = String.fromCodePoint(0x1D7EC + i);\n  }\n  return text.split('').map(c => boldMap[c] || c).join('');\n}\n\nconst helpText = [\n  toBold('Welcome to STMNA Signal!'),\n  '',\n  'Send any YouTube, web page, link to PDF or post on X and get summarized content back!',\n  '',\n  'Jobs are processed at night and results will be shared with you next day at 08:00AM.',\n  '',\n  toBold('Bot Commands:'),\n  '',\n  '(no flag) - Full summary + vault save',\n  'quick - Fast summary, Signal only (no vault)',\n  'deep - Extended detailed analysis',\n  'help - This command list',\n  '',\n  toBold('Coming soon:'),\n  '',\n  'transcript - Transcription only',\n  'braindump - Structure text to vault',\n  'tts - Audio version of summary',\n  'translate [lang] - Translate summary',\n  'dub [lang] - Dubbed video',\n  '',\n  toBold('Examples:'),\n  'https://youtube.com/watch?v=abc',\n  'quick https://article.com/post',\n  'deep https://github.com/user/repo'\n].join('\\n');\n\nreturn [{ json: { ...$input.first().json, _response: helpText, _skipVault: true } }];"
+          "jsCode": "// HELP RESPONSE \u2014 Returns command list with Unicode bold headers\n\n// Unicode Bold converter (Mathematical Bold Sans-Serif)\nfunction toBold(text) {\n  const boldMap = {};\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(65 + i)] = String.fromCodePoint(0x1D5D4 + i);\n  }\n  for (let i = 0; i < 26; i++) {\n    boldMap[String.fromCharCode(97 + i)] = String.fromCodePoint(0x1D5EE + i);\n  }\n  for (let i = 0; i < 10; i++) {\n    boldMap[String.fromCharCode(48 + i)] = String.fromCodePoint(0x1D7EC + i);\n  }\n  return text.split('').map(c => boldMap[c] || c).join('');\n}\n\nconst helpText = [\n  toBold('Welcome to STMNA Signal!'),\n  '',\n  'Send any YouTube, web page, link to PDF or post on X and get summarized content back!',\n  '',\n  'Jobs are processed at night and results will be shared with you next day at 08:00AM.',\n  '',\n  toBold('Bot Commands:'),\n  '',\n  '(no flag) - Full summary + vault save',\n  'quick - Fast summary, Signal only (no vault)',\n  'deep - Extended detailed analysis',\n  'help - This command list',\n  '',\n  toBold('Coming soon:'),\n  '',\n  'transcript - Transcription only',\n  'braindump - Structure text to vault',\n  'tts - Audio version of summary',\n  'translate [lang] - Translate summary',\n  'dub [lang] - Dubbed video',\n  '',\n  toBold('Examples:'),\n  'https://youtube.com/watch?v=abc',\n  'quick https://article.com/post',\n  'deep https://github.com/user/repo'\n].join('\\n');\n\nreturn [{ json: { ...$input.first().json, _response: helpText, _skipVault: true } }];"
         },
         "name": "Help Response",
         "type": "n8n-nodes-base.code",
@@ -1311,7 +1439,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// NORMALIZE CONTENT KEY\n// Extracts a stable, cache-friendly key from the URL.\n// YouTube: video ID (11 chars). Web: cleaned URL without tracking params.\n// Also determines _contentType for downstream routing.\n// UPDATED: Phase 1D — Added X/Twitter, GitHub, PDF, Spotify, Tidal detection\n//          + braindump/voice-note detection for no-URL messages\n\nconst item = $('Command Parser').first().json;\nconst url = item._url || '';\n\n// Attach identity from the Resolve Identity node\nconst identityData = $('Resolve Identity').first().json;\nconst userId = identityData?.id || null;\nconst userRole = identityData?.role || 'user';\nconst userName = identityData?.name || 'Unknown';\n\nlet contentKey = '';\nlet contentType = '';\n\nif (!url) {\n  // No URL — check for voice note attachment or braindump text\n  const isVoiceNote = item._hasAttachment && (item._attachmentType || '').startsWith('audio/');\n  const isBraindump = (item._flags?.braindump === true) || (!isVoiceNote && item._text && item._text.length > 0);\n\n  return [{ json: {\n    ...item,\n    _userId: userId,\n    _userRole: userRole,\n    _userName: userName,\n    _contentKey: '',\n    _contentType: isVoiceNote ? 'voice-note' : (isBraindump ? 'braindump' : 'none')\n  }}];\n}\n\n// ---- YOUTUBE ----\nconst ytPatterns = [\n  /(?:youtube\\.com\\/watch\\?.*v=)([a-zA-Z0-9_-]{11})/,\n  /(?:youtu\\.be\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/live\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]{11})/\n];\nfor (const pattern of ytPatterns) {\n  const match = url.match(pattern);\n  if (match) {\n    contentKey = `yt:${match[1]}`;\n    contentType = 'youtube';\n    break;\n  }\n}\n\n// ---- X/TWITTER ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(x\\.com|twitter\\.com)\\//i.test(url)) {\n  contentType = 'x-post';\n}\n\n// ---- GITHUB/GITLAB ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(github\\.com|gitlab\\.com)\\//i.test(url)) {\n  contentType = 'github';\n}\n\n// ---- PDF (URL ending in .pdf) ----\nif (!contentType && /\\.pdf(\\?|#|$)/i.test(url)) {\n  contentType = 'paper';\n}\n\n// ---- SPOTIFY ----\nif (!contentType && /^https?:\\/\\/open\\.spotify\\.com\\//i.test(url)) {\n  contentType = 'spotify';\n}\n\n// ---- TIDAL ----\nif (!contentType && /^https?:\\/\\/(www\\.)?tidal\\.com\\//i.test(url)) {\n  contentType = 'tidal';\n}\n\n// ---- WEB (fallback) ----\nif (!contentType) {\n  contentType = 'web';\n}\n\n// Build content key for all URL-based types (except YouTube, already set above)\nif (!contentKey) {\n  try {\n    const parsed = new URL(url);\n    const trackingParams = [\n      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',\n      'fbclid', 'gclid', 'ref', 'ref_src', 'ref_url',\n      'mc_cid', 'mc_eid', 's', 'si'\n    ];\n    for (const param of trackingParams) {\n      parsed.searchParams.delete(param);\n    }\n    const hostPath = parsed.hostname.toLowerCase() + parsed.pathname.replace(/\\/$/, '');\n    const query = parsed.searchParams.toString() ? '?' + parsed.searchParams.toString() : '';\n    const hash = parsed.hash || '';\n    contentKey = `web:${hostPath}${query}${hash}`;\n  } catch (e) {\n    contentKey = `web:${url.replace(/^https?:\\/\\//, '').replace(/\\/$/, '')}`;\n  }\n}\n\nreturn [{ json: {\n  ...item,\n  _userId: userId,\n  _userRole: userRole,\n  _userName: userName,\n  _contentKey: contentKey,\n  _contentType: contentType\n}}];\n"
+          "jsCode": "// NORMALIZE CONTENT KEY\n// Extracts a stable, cache-friendly key from the URL.\n// YouTube: video ID (11 chars). Web: cleaned URL without tracking params.\n// Also determines _contentType for downstream routing.\n// UPDATED: Phase 1D \u2014 Added X/Twitter, GitHub, PDF, Spotify, Tidal detection\n//          + braindump/voice-note detection for no-URL messages\n\nconst item = $('Command Parser').first().json;\nconst url = item._url || '';\n\n// Attach identity from the Resolve Identity node\nconst identityData = $('Resolve Identity').first().json;\nconst userId = identityData?.id || null;\nconst userRole = identityData?.role || 'user';\nconst userName = identityData?.name || 'Unknown';\n\nlet contentKey = '';\nlet contentType = '';\n\nif (!url) {\n  // No URL \u2014 check for voice note attachment or braindump text\n  const isVoiceNote = item._hasAttachment && (item._attachmentType || '').startsWith('audio/');\n  const isBraindump = (item._flags?.braindump === true) || (!isVoiceNote && item._text && item._text.length > 0);\n\n  return [{ json: {\n    ...item,\n    _userId: userId,\n    _userRole: userRole,\n    _userName: userName,\n    _contentKey: '',\n    _contentType: isVoiceNote ? 'voice-note' : (isBraindump ? 'braindump' : 'none')\n  }}];\n}\n\n// ---- YOUTUBE ----\nconst ytPatterns = [\n  /(?:youtube\\.com\\/watch\\?.*v=)([a-zA-Z0-9_-]{11})/,\n  /(?:youtu\\.be\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/live\\/)([a-zA-Z0-9_-]{11})/,\n  /(?:youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]{11})/\n];\nfor (const pattern of ytPatterns) {\n  const match = url.match(pattern);\n  if (match) {\n    contentKey = `yt:${match[1]}`;\n    contentType = 'youtube';\n    break;\n  }\n}\n\n// ---- X/TWITTER ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(x\\.com|twitter\\.com)\\//i.test(url)) {\n  contentType = 'x-post';\n}\n\n// ---- GITHUB/GITLAB ----\nif (!contentType && /^https?:\\/\\/(www\\.)?(github\\.com|gitlab\\.com)\\//i.test(url)) {\n  contentType = 'github';\n}\n\n// ---- PDF (URL ending in .pdf) ----\nif (!contentType && /\\.pdf(\\?|#|$)/i.test(url)) {\n  contentType = 'paper';\n}\n\n// ---- SPOTIFY ----\nif (!contentType && /^https?:\\/\\/open\\.spotify\\.com\\//i.test(url)) {\n  contentType = 'spotify';\n}\n\n// ---- TIDAL ----\nif (!contentType && /^https?:\\/\\/(www\\.)?tidal\\.com\\//i.test(url)) {\n  contentType = 'tidal';\n}\n\n// ---- WEB (fallback) ----\nif (!contentType) {\n  contentType = 'web';\n}\n\n// Build content key for all URL-based types (except YouTube, already set above)\nif (!contentKey) {\n  try {\n    const parsed = new URL(url);\n    const trackingParams = [\n      'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',\n      'fbclid', 'gclid', 'ref', 'ref_src', 'ref_url',\n      'mc_cid', 'mc_eid', 's', 'si'\n    ];\n    for (const param of trackingParams) {\n      parsed.searchParams.delete(param);\n    }\n    const hostPath = parsed.hostname.toLowerCase() + parsed.pathname.replace(/\\/$/, '');\n    const query = parsed.searchParams.toString() ? '?' + parsed.searchParams.toString() : '';\n    const hash = parsed.hash || '';\n    contentKey = `web:${hostPath}${query}${hash}`;\n  } catch (e) {\n    contentKey = `web:${url.replace(/^https?:\\/\\//, '').replace(/\\/$/, '')}`;\n  }\n}\n\nreturn [{ json: {\n  ...item,\n  _userId: userId,\n  _userRole: userRole,\n  _userName: userName,\n  _contentKey: contentKey,\n  _contentType: contentType\n}}];\n"
         },
         "name": "Normalize Content Key",
         "type": "n8n-nodes-base.code",
@@ -1383,7 +1511,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// CHECK CACHE HIT — Routes based on Cache Check PostgreSQL result\n// The Cache Check node returns the cached row if found, empty object if not.\n// We check if content_key exists and is non-empty.\nconst cacheResult = $input.first().json;\nconst hasCacheHit = !!(cacheResult && cacheResult.content_key && cacheResult.content_key.length > 0);\n\nreturn [{ json: { ...cacheResult, _hasCacheHit: hasCacheHit } }];"
+          "jsCode": "// CHECK CACHE HIT \u2014 Routes based on Cache Check PostgreSQL result\n// The Cache Check node returns the cached row if found, empty object if not.\n// We check if content_key exists and is non-empty.\nconst cacheResult = $input.first().json;\nconst hasCacheHit = !!(cacheResult && cacheResult.content_key && cacheResult.content_key.length > 0);\n\nreturn [{ json: { ...cacheResult, _hasCacheHit: hasCacheHit } }];"
         },
         "name": "Check Cache Result",
         "type": "n8n-nodes-base.code",
@@ -1454,7 +1582,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// SEND ACK — Acknowledges queued job to sender\n// Admin: \"Getting details on [link]\"\n// User: \"Getting details on [link] + ready tomorrow morning\"\n\nconst item = $('Normalize Content Key').first().json;\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\nconst url = item._url || '';\n\nlet response = '';\n\nif (isAdmin) {\n  response = `\\ud83d\\udd0d Getting details on ${url}`;\n} else {\n  response = `\\ud83d\\udd0d Getting details on ${url}\\n\\nReady for you tomorrow first thing in the morning!`;\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+          "jsCode": "// SEND ACK \u2014 Acknowledges queued job to sender\n// Admin: \"Getting details on [link]\"\n// User: \"Getting details on [link] + ready tomorrow morning\"\n\nconst item = $('Normalize Content Key').first().json;\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\nconst url = item._url || '';\n\nlet response = '';\n\nif (isAdmin) {\n  response = `\\ud83d\\udd0d Getting details on ${url}`;\n} else {\n  response = `\\ud83d\\udd0d Getting details on ${url}\\n\\nReady for you tomorrow first thing in the morning!`;\n}\n\nreturn [{ json: { ...item, _response: response } }];"
         },
         "name": "Send Ack",
         "type": "n8n-nodes-base.code",
@@ -1607,7 +1735,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// UNSUPPORTED RESPONSE — Spotify/Tidal \"coming soon\" + empty message handling\nconst item = $input.first().json;\nconst ct = item._contentType || 'none';\n\nlet response = '';\nif (ct === 'spotify') {\n  response = '\\u{1F3B5} Spotify support coming soon! For now, share the YouTube link if available.';\n} else if (ct === 'tidal') {\n  response = '\\u{1F3B5} Tidal support coming soon! For now, share the YouTube link if available.';\n} else {\n  // _contentType === 'none' — no URL, no text, no attachment\n  response = \"I didn't catch that. Send me a URL, a voice note, or text with the braindump flag.\\n\\nSend help for available commands.\";\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+          "jsCode": "// UNSUPPORTED RESPONSE \u2014 Spotify/Tidal \"coming soon\" + empty message handling\nconst item = $input.first().json;\nconst ct = item._contentType || 'none';\n\nlet response = '';\nif (ct === 'spotify') {\n  response = '\\u{1F3B5} Spotify support coming soon! For now, share the YouTube link if available.';\n} else if (ct === 'tidal') {\n  response = '\\u{1F3B5} Tidal support coming soon! For now, share the YouTube link if available.';\n} else {\n  // _contentType === 'none' \u2014 no URL, no text, no attachment\n  response = \"I didn't catch that. Send me a URL, a voice note, or text with the braindump flag.\\n\\nSend help for available commands.\";\n}\n\nreturn [{ json: { ...item, _response: response } }];"
         },
         "name": "Unsupported Response",
         "type": "n8n-nodes-base.code",
@@ -1661,7 +1789,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// BRAINDUMP/VOICE ACK — Acknowledge queued braindump or voice note\nconst item = $('Normalize Content Key').first().json;\nconst ct = item._contentType || 'braindump';\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\n\nlet response = '';\nif (ct === 'voice-note') {\n  response = '\\u{1F3A4} Transcribing your voice note...';\n} else {\n  response = '\\u{1F4DD} Structuring your braindump...';\n}\n\nif (!isAdmin) {\n  response += '\\n\\nReady for you tomorrow first thing in the morning!';\n}\n\nreturn [{ json: { ...item, _response: response } }];"
+          "jsCode": "// BRAINDUMP/VOICE ACK \u2014 Acknowledge queued braindump or voice note\nconst item = $('Normalize Content Key').first().json;\nconst ct = item._contentType || 'braindump';\nconst ADMIN_UUID = 'YOUR_UUID';\nconst isAdmin = (item._senderUuid === ADMIN_UUID || item._userRole === 'admin');\n\nlet response = '';\nif (ct === 'voice-note') {\n  response = '\\u{1F3A4} Transcribing your voice note...';\n} else {\n  response = '\\u{1F4DD} Structuring your braindump...';\n}\n\nif (!isAdmin) {\n  response += '\\n\\nReady for you tomorrow first thing in the morning!';\n}\n\nreturn [{ json: { ...item, _response: response } }];"
         },
         "name": "Braindump Ack",
         "type": "n8n-nodes-base.code",
