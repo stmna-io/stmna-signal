@@ -15,49 +15,51 @@
           ]
         }
       },
-      "id": "nc-trigger",
+      "id": "e53741c2-29ed-4237-8d84-1e1bf7f5441f",
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        220,
-        300
-      ]
+        224,
+        304
+      ],
+      "notes": "Polls NextCloud inbox every 60 seconds for new files."
     },
     {
       "parameters": {
+        "resource": "folder",
         "operation": "list",
-        "path": "/Shared/Shared/Pipeline/Inbox/",
-        "options": {},
-        "resource": "folder"
+        "path": "/Shared/Shared/Pipeline/Inbox/"
       },
-      "id": "nc-list-files",
+      "id": "591d3d58-e426-4bf5-b7af-1199c4504809",
       "name": "List Inbox Files",
       "type": "n8n-nodes-base.nextCloud",
       "typeVersion": 1,
       "position": [
-        440,
-        300
+        448,
+        112
       ],
       "credentials": {
         "nextCloudApi": {
           "id": "YOUR_CREDENTIAL_ID",
           "name": "YOUR_NEXT_CLOUD_API_CREDENTIAL"
         }
-      }
+      },
+      "notes": "Lists files in Pipeline/Inbox/ on NextCloud."
     },
     {
       "parameters": {
-        "jsCode": "/**\n * CLASSIFY FILES — Filter and classify files from NextCloud listing\n * NextCloud folder:list returns items with: path, lastModified, contentLength, contentType, type\n * Each item has type=\"file\" or type=\"folder\".\n * Determines content_type from file extension AND parent folder.\n * Files in Translate/ folder → translate-book content type.\n * Skips directories, hidden files, and unsupported types.\n */\nconst items = $input.all();\nconst results = [];\n\nconst videoExts = ['mp4', 'mkv', 'webm', 'mov', 'avi'];\nconst audioExts = ['mp3', 'm4a', 'ogg', 'wav', 'opus', 'flac', 'aac'];\nconst bookExts = ['epub'];\n\nfor (const item of items) {\n  const data = item.json || {};\n  \n  // Skip empty results (when folder is empty, NextCloud returns {})\n  if (!data.path && !data.type) continue;\n  \n  // Skip folders — we only want files\n  if (data.type === 'folder') continue;\n  \n  const filePath = data.path || '';\n  if (!filePath) continue;\n  \n  // Extract filename from path\n  const parts = filePath.split('/').filter(Boolean);\n  const fileName = parts[parts.length - 1];\n  if (!fileName || fileName.startsWith('.') || fileName.startsWith('_')) continue;\n  \n  // Decode URL-encoded filenames\n  const decodedName = decodeURIComponent(fileName);\n  const ext = decodedName.split('.').pop().toLowerCase();\n  \n  // Detect which folder the file is in\n  const isTranslateFolder = filePath.toLowerCase().includes('/translate/');\n  \n  let contentType = null;\n  let flags = {};\n  \n  if (isTranslateFolder) {\n    // Translate folder: only accept book files (epub)\n    if (bookExts.includes(ext)) {\n      contentType = 'translate-book';\n      // Default to French translation (most content is English)\n      // Worker will auto-detect source language from EPUB metadata\n      flags = { translate: 'fr' };\n    }\n    // Skip non-book files in Translate folder\n    if (!contentType) continue;\n  } else {\n    // Inbox folder: standard classification\n    if (videoExts.includes(ext)) {\n      contentType = 'local-video';\n    } else if (audioExts.includes(ext)) {\n      contentType = 'local-audio';\n    } else if (bookExts.includes(ext)) {\n      contentType = 'local-book';\n    }\n  }\n  \n  // Skip unsupported file types\n  if (!contentType) continue;\n  \n  // Generate slug from filename\n  const slug = decodedName.toLowerCase()\n    .replace(/\\.[^.]+$/, '')\n    .replace(/[^a-z0-9\\s-]/g, '')\n    .replace(/\\s+/g, '-')\n    .substring(0, 60);\n  \n  // Build NextCloud path for download/move operations\n  const ncFolder = isTranslateFolder ? 'Translate' : 'Inbox';\n  \n  results.push({ json: {\n    _fileName: decodedName,\n    _ncPath: `/Shared/Shared/Pipeline/${ncFolder}/${decodedName}`,\n    _contentType: contentType,\n    _ext: ext,\n    _slug: slug || 'file',\n    _source: 'nextcloud',\n    _fileSize: parseInt(data.contentLength || '0', 10),\n    _flags: flags,\n    _ncFolder: ncFolder\n  }});\n}\n\n// If no processable files found, return empty marker\nif (results.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn results;\n"
+        "jsCode": "// determine content type from file extension\n// books = epub/pdf, audio = mp3/wav/ogg, video = mp4/mkv, translate = Translate/ subfolder\n\nconst items = $input.all();\nconst results = [];\n\nconst videoExts = ['mp4', 'mkv', 'webm', 'mov', 'avi'];\nconst audioExts = ['mp3', 'm4a', 'ogg', 'wav', 'opus', 'flac', 'aac'];\nconst bookExts = ['epub'];\n\nfor (const item of items) {\n  const data = item.json || {};\n  \n  // Skip empty results (when folder is empty, NextCloud returns {})\n  if (!data.path && !data.type) continue;\n  \n  // Skip folders \u2014 we only want files\n  if (data.type === 'folder') continue;\n  \n  const filePath = data.path || '';\n  if (!filePath) continue;\n  \n  // Extract filename from path\n  const parts = filePath.split('/').filter(Boolean);\n  const fileName = parts[parts.length - 1];\n  if (!fileName || fileName.startsWith('.') || fileName.startsWith('_')) continue;\n  \n  // Decode URL-encoded filenames\n  const decodedName = decodeURIComponent(fileName);\n  const ext = decodedName.split('.').pop().toLowerCase();\n  \n  // Detect which folder the file is in\n  const isTranslateFolder = filePath.toLowerCase().includes('/translate/');\n  \n  let contentType = null;\n  let flags = {};\n  \n  if (isTranslateFolder) {\n    // Translate folder: only accept book files (epub)\n    if (bookExts.includes(ext)) {\n      contentType = 'translate-book';\n      // Default to French translation (most content is English)\n      // Worker will auto-detect source language from EPUB metadata\n      flags = { translate: 'fr' };\n    }\n    // Skip non-book files in Translate folder\n    if (!contentType) continue;\n  } else {\n    // Inbox folder: standard classification\n    if (videoExts.includes(ext)) {\n      contentType = 'local-video';\n    } else if (audioExts.includes(ext)) {\n      contentType = 'local-audio';\n    } else if (bookExts.includes(ext)) {\n      contentType = 'local-book';\n    }\n  }\n  \n  // Skip unsupported file types\n  if (!contentType) continue;\n  \n  // Generate slug from filename\n  const slug = decodedName.toLowerCase()\n    .replace(/\\.[^.]+$/, '')\n    .replace(/[^a-z0-9\\s-]/g, '')\n    .replace(/\\s+/g, '-')\n    .substring(0, 60);\n  \n  // Build NextCloud path for download/move operations\n  const ncFolder = isTranslateFolder ? 'Translate' : 'Inbox';\n  \n  results.push({ json: {\n    _fileName: decodedName,\n    _ncPath: `/Shared/Shared/Pipeline/${ncFolder}/${decodedName}`,\n    _contentType: contentType,\n    _ext: ext,\n    _slug: slug || 'file',\n    _source: 'nextcloud',\n    _fileSize: parseInt(data.contentLength || '0', 10),\n    _flags: flags,\n    _ncFolder: ncFolder\n  }});\n}\n\n// If no processable files found, return empty marker\nif (results.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn results;\n"
       },
-      "id": "nc-classify",
+      "id": "4d5284fd-e5dd-4dae-8263-8bc0b400d999",
       "name": "Classify Files",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
-        300
-      ]
+        672,
+        304
+      ],
+      "notes": "Determines content type from file extension. Books (epub/pdf) vs audio/video vs translate."
     },
     {
       "parameters": {
@@ -79,16 +81,18 @@
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
-      "id": "nc-filter-empty",
+      "id": "7fa06e61-9d45-4bfd-8b81-27818de3f759",
       "name": "Has Files?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        880,
-        300
-      ]
+        816,
+        304
+      ],
+      "notes": "any files in inbox? yes = process them, no = done"
     },
     {
       "parameters": {
@@ -96,34 +100,36 @@
         "query": "={{ `SELECT content_key FROM content_cache WHERE content_key LIKE 'file:%_${$json._slug}' AND content_type = '${$json._contentType}' LIMIT 1;` }}",
         "options": {}
       },
-      "id": "nc-cache-check",
+      "id": "df068933-1c9d-40ed-a99e-ab164cf90d94",
       "name": "Cache Check",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1100,
-        200
+        1104,
+        304
       ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "YOUR_CREDENTIAL_ID",
           "name": "YOUR_POSTGRES_CREDENTIAL"
         }
       },
-      "alwaysOutputData": true
+      "notes": "Checks content_cache for already-processed files by content key."
     },
     {
       "parameters": {
-        "jsCode": "/**\n * CHECK CACHE RESULT — Determine if file was already processed OR already queued\n * Checks both content_cache (processed) and pipeline_queue (pending/processing).\n * Uses Code+IF pattern (not IF node alone) due to n8n IF v2.2 quirk.\n */\nconst cacheItems = $input.all();\nconst classifyData = $('Classify Files').first().json;\n\n// Check content_cache hit\nconst hasCache = cacheItems.length > 0 && cacheItems[0].json.content_key;\n\n// Also check if this file is already queued (pending/processing) in pipeline_queue\n// This prevents re-queuing during the processing window (which can be 60+ min for books)\nlet alreadyQueued = false;\nif (!hasCache) {\n  // We need the content key — but it's computed after download, which hasn't happened yet.\n  // Instead, check by filename: look for pending/processing jobs from nextcloud\n  // with this filename in their message_text metadata.\n  const fileName = classifyData._fileName || '';\n  if (fileName) {\n    try {\n      // This node receives PostgreSQL output from Cache Check.\n      // We can't run another query here, but we can use the _fileName\n      // to mark it for a downstream queue check.\n      // Actually, we'll use a simpler approach: check if the file was\n      // already seen by looking at a broader cache check in the query.\n    } catch(e) {}\n  }\n}\n\nreturn [{ json: {\n  ...classifyData,\n  _hasCache: !!hasCache,\n  _cachedKey: hasCache ? cacheItems[0].json.content_key : null\n} }];"
+        "jsCode": "// route based on cache check: hit = move to processed, miss = queue\n\nconst cacheItems = $input.all();\nconst classifyData = $('Classify Files').first().json;\n\n// Check content_cache hit\nconst hasCache = cacheItems.length > 0 && cacheItems[0].json.content_key;\n\n// Also check if this file is already queued (pending/processing) in pipeline_queue\n// This prevents re-queuing during the processing window (which can be 60+ min for books)\nlet alreadyQueued = false;\nif (!hasCache) {\n  // We need the content key \u2014 but it's computed after download, which hasn't happened yet.\n  // Instead, check by filename: look for pending/processing jobs from nextcloud\n  // with this filename in their message_text metadata.\n  const fileName = classifyData._fileName || '';\n  if (fileName) {\n    try {\n      // This node receives PostgreSQL output from Cache Check.\n      // We can't run another query here, but we can use the _fileName\n      // to mark it for a downstream queue check.\n      // Actually, we'll use a simpler approach: check if the file was\n      // already seen by looking at a broader cache check in the query.\n    } catch(e) {}\n  }\n}\n\nreturn [{ json: {\n  ...classifyData,\n  _hasCache: !!hasCache,\n  _cachedKey: hasCache ? cacheItems[0].json.content_key : null\n} }];"
       },
-      "id": "nc-check-cache",
+      "id": "34fc5caf-14c6-4128-a2f9-bda8a71844f2",
       "name": "Check Cache Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1320,
-        200
-      ]
+        1328,
+        304
+      ],
+      "notes": "Routes based on cache hit: cached = move to processed, new = queue for Worker."
     },
     {
       "parameters": {
@@ -145,50 +151,53 @@
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
-      "id": "nc-has-cache",
+      "id": "67e879f3-5589-4f7f-b842-fed6e669a25e",
       "name": "Has Cache?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1540,
-        200
-      ]
+        1504,
+        304
+      ],
+      "notes": "cached? yes = skip to processed, no = queue for processing"
     },
     {
       "parameters": {
         "operation": "download",
-        "path": "={{ $json._ncPath }}",
-        "options": {}
+        "path": "={{ $json._ncPath }}"
       },
-      "id": "nc-download",
+      "id": "9b96f351-f86a-4a1b-a250-188a3062cb4e",
       "name": "Download File",
       "type": "n8n-nodes-base.nextCloud",
       "typeVersion": 1,
       "position": [
-        1760,
-        100
+        2256,
+        480
       ],
       "credentials": {
         "nextCloudApi": {
           "id": "YOUR_CREDENTIAL_ID",
           "name": "YOUR_NEXT_CLOUD_API_CREDENTIAL"
         }
-      }
+      },
+      "notes": "Downloads file from NextCloud Inbox for local processing."
     },
     {
       "parameters": {
-        "jsCode": "/**\n * SAVE FILE & COMPUTE KEY — Copy binary from n8n storage to /tmp, compute content key\n * n8n filesystem-v2 stores binary data in storage directory.\n * We copy it to /tmp/ for ffmpeg/whisper processing downstream.\n */\nconst fs = require('fs');\nconst { execFileSync } = require('child_process');\n\nconst classifyData = $('Check Cache Result').first().json;\nconst fileName = classifyData._fileName;\nconst stamp = String(Date.now()) + '_' + Math.random().toString(36).slice(2, 6);\n// Use persistent directory for files that need to survive across executions\nconst pipeDir = '/home/node/.n8n/pipeline-files';\ntry { const fs2 = require('fs'); if (!fs2.existsSync(pipeDir)) fs2.mkdirSync(pipeDir, {recursive: true}); } catch(e) {}\nconst localPath = `${pipeDir}/nc_${stamp}_${fileName}`;\n\n// Get binary data reference from Download File node\nconst binaryData = $input.first().binary;\nif (!binaryData || !binaryData.data) {\n  throw new Error('No binary data from NextCloud download');\n}\n\nconst binaryInfo = binaryData.data;\n\n// filesystem-v2: binary stored on disk, id contains the path\n// id format: \"filesystem-v2:workflows/<wfId>/executions/<exId>/binary_data/<uuid>\"\nif (binaryInfo.id && binaryInfo.id.startsWith('filesystem-v2:')) {\n  const storagePath = '/home/node/.n8n/storage/' + binaryInfo.id.replace('filesystem-v2:', '');\n  if (!fs.existsSync(storagePath)) {\n    throw new Error('Binary storage file not found: ' + storagePath);\n  }\n  fs.copyFileSync(storagePath, localPath);\n} else if (binaryInfo.data && binaryInfo.data.length > 100) {\n  // Legacy base64 mode (fallback)\n  const buffer = Buffer.from(binaryInfo.data, 'base64');\n  fs.writeFileSync(localPath, buffer);\n} else {\n  throw new Error('Cannot read binary data. id=' + (binaryInfo.id || 'none') + ', data_len=' + (binaryInfo.data || '').length);\n}\n\nconst fileSize = fs.statSync(localPath).size;\nif (fileSize < 1000) throw new Error('Downloaded file too small: ' + fileSize + ' bytes');\n\n// Compute content key hash using sha256sum CLI\nlet hashPrefix;\ntry {\n  const hashOut = execFileSync('sha256sum', [localPath], { encoding: 'utf-8', timeout: 60000 });\n  hashPrefix = hashOut.split(' ')[0].substring(0, 8);\n} catch(e) {\n  hashPrefix = String(fileSize).substring(0, 8).padStart(8, '0');\n}\n\nconst slug = classifyData._slug || 'file';\nconst contentKey = `file:${hashPrefix}_${slug}`;\n\nreturn [{ json: {\n  ...classifyData,\n  _filePath: localPath,\n  _fileSize: fileSize,\n  _contentKey: contentKey,\n  _tmpStamp: stamp\n} }];"
+        "jsCode": "// save downloaded file to /tmp/ and compute content key from SHA256\n\nconst fs = require('fs');\nconst { execFileSync } = require('child_process');\n\nconst classifyData = $('Check Cache Result').first().json;\nconst fileName = classifyData._fileName;\nconst stamp = String(Date.now()) + '_' + Math.random().toString(36).slice(2, 6);\n// Use persistent directory for files that need to survive across executions\nconst pipeDir = '/home/node/.n8n/pipeline-files';\ntry { const fs2 = require('fs'); if (!fs2.existsSync(pipeDir)) fs2.mkdirSync(pipeDir, {recursive: true}); } catch(e) {}\nconst localPath = `${pipeDir}/nc_${stamp}_${fileName}`;\n\n// Get binary data reference from Download File node\nconst binaryData = $input.first().binary;\nif (!binaryData || !binaryData.data) {\n  throw new Error('No binary data from NextCloud download');\n}\n\nconst binaryInfo = binaryData.data;\n\n// filesystem-v2: binary stored on disk, id contains the path\n// id format: \"filesystem-v2:workflows/<wfId>/executions/<exId>/binary_data/<uuid>\"\nif (binaryInfo.id && binaryInfo.id.startsWith('filesystem-v2:')) {\n  const storagePath = '/home/node/.n8n/storage/' + binaryInfo.id.replace('filesystem-v2:', '');\n  if (!fs.existsSync(storagePath)) {\n    throw new Error('Binary storage file not found: ' + storagePath);\n  }\n  fs.copyFileSync(storagePath, localPath);\n} else if (binaryInfo.data && binaryInfo.data.length > 100) {\n  // Legacy base64 mode (fallback)\n  const buffer = Buffer.from(binaryInfo.data, 'base64');\n  fs.writeFileSync(localPath, buffer);\n} else {\n  throw new Error('Cannot read binary data. id=' + (binaryInfo.id || 'none') + ', data_len=' + (binaryInfo.data || '').length);\n}\n\nconst fileSize = fs.statSync(localPath).size;\nif (fileSize < 1000) throw new Error('Downloaded file too small: ' + fileSize + ' bytes');\n\n// Compute content key hash using sha256sum CLI\nlet hashPrefix;\ntry {\n  const hashOut = execFileSync('sha256sum', [localPath], { encoding: 'utf-8', timeout: 60000 });\n  hashPrefix = hashOut.split(' ')[0].substring(0, 8);\n} catch(e) {\n  hashPrefix = String(fileSize).substring(0, 8).padStart(8, '0');\n}\n\nconst slug = classifyData._slug || 'file';\nconst contentKey = `file:${hashPrefix}_${slug}`;\n\nreturn [{ json: {\n  ...classifyData,\n  _filePath: localPath,\n  _fileSize: fileSize,\n  _contentKey: contentKey,\n  _tmpStamp: stamp\n} }];"
       },
-      "id": "nc-save-compute",
+      "id": "c31aaafa-9a0b-4d77-910a-1f1c59edae7c",
       "name": "Save File & Compute Key",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1980,
-        100
-      ]
+        2496,
+        480
+      ],
+      "notes": "Saves downloaded file to /tmp/ and computes content key from file hash."
     },
     {
       "parameters": {
@@ -196,96 +205,95 @@
         "query": "={{ (() => {\n  const item = $json;\n  const url = '';\n  const ct = item._contentType || 'local-audio';\n  // Pass through flags from Classify Files (e.g., translate flag for Translate folder)\n  const classifyData = $('Check Cache Result').first().json;\n  const flagsObj = classifyData._flags || item._flags || {};\n  const flagsJson = JSON.stringify(flagsObj).replace(/'/g, \"''\");\n  const userId = 1; // Admin (Dee)\n  const src = 'nextcloud';\n  const meta = JSON.stringify({\n    filePath: item._filePath,\n    fileName: item._fileName,\n    contentKey: item._contentKey,\n    slug: item._slug,\n    fileSize: item._fileSize,\n    ncPath: item._ncPath,\n    ncFolder: item._ncFolder\n  }).replace(/'/g, \"''\");\n  return `INSERT INTO pipeline_queue (url, content_type, flags, sender, source_channel, message_text, priority, scheduled_after, status) VALUES ('${url}', '${ct}', '${flagsJson}', ${userId}, '${src}', '${meta}', 'immediate', NULL, 'pending') RETURNING id, priority;`;\n})() }}",
         "options": {}
       },
-      "id": "nc-queue-job",
+      "id": "9c48978e-979f-4f54-9c7f-cde7a31a8407",
       "name": "Queue Job",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        2200,
-        100
+        2736,
+        480
       ],
       "credentials": {
         "postgres": {
           "id": "YOUR_CREDENTIAL_ID",
           "name": "YOUR_POSTGRES_CREDENTIAL"
         }
-      }
+      },
+      "notes": "Inserts NextCloud file processing job into pipeline_queue for the Worker."
     },
     {
       "parameters": {
-        "resource": "file",
         "operation": "move",
         "path": "={{ $('Check Cache Result').first().json._ncPath }}",
-        "toPath": "={{ `/Shared/Shared/Pipeline/Processed/${$('Check Cache Result').first().json._fileName}` }}",
-        "options": {}
+        "toPath": "={{ `/Shared/Shared/Pipeline/Processed/${$('Check Cache Result').first().json._fileName}` }}"
       },
-      "id": "nc-move-processed",
+      "id": "8e85fb26-3d41-4511-b396-6ba8b330b70a",
       "name": "Move to Processed",
       "type": "n8n-nodes-base.nextCloud",
       "typeVersion": 1,
       "position": [
-        2420,
-        100
+        3040,
+        480
       ],
       "credentials": {
         "nextCloudApi": {
           "id": "YOUR_CREDENTIAL_ID",
           "name": "YOUR_NEXT_CLOUD_API_CREDENTIAL"
         }
-      }
+      },
+      "notes": "Moves queued file from Inbox to Processed after job creation."
     },
     {
       "parameters": {
-        "resource": "file",
         "operation": "move",
         "path": "={{ $json._ncPath }}",
-        "toPath": "={{ `/Shared/Shared/Pipeline/Processed/${$json._fileName}` }}",
-        "options": {}
+        "toPath": "={{ `/Shared/Shared/Pipeline/Processed/${$json._fileName}` }}"
       },
-      "id": "nc-move-cached",
+      "id": "a53d6ec1-f5a7-4865-8114-133566fab235",
       "name": "Move Cached to Processed",
       "type": "n8n-nodes-base.nextCloud",
       "typeVersion": 1,
       "position": [
-        1760,
-        300
+        1744,
+        128
       ],
       "credentials": {
         "nextCloudApi": {
           "id": "YOUR_CREDENTIAL_ID",
           "name": "YOUR_NEXT_CLOUD_API_CREDENTIAL"
         }
-      }
+      },
+      "notes": "Moves already-cached file from Inbox to Processed on NextCloud."
     },
     {
       "parameters": {
-        "content": "## SIGNAL_NEXTCLOUD\nPhase 1E — NextCloud File Ingestion\n\nPolls Pipeline/inbox/ every 60s.\nClassifies by extension → queues for Worker.\nFiles moved to Pipeline/processed/ after queuing.",
-        "width": 400,
-        "height": 200
+        "content": "# Signal NextCloud\n## Phase 1E \u2014 NextCloud File Ingestion\n\n## Polls Pipeline/inbox/ every 60s.\n## Classifies by extension \u2192 queues for Worker.\n## Files moved to Pipeline/processed/ after queuing.",
+        "height": 312,
+        "width": 848,
+        "color": 6
       },
-      "id": "nc-sticky",
-      "name": "Section: NEXTCLOUD INGESTION",
+      "id": "50480225-cb96-4c79-9c79-e86982a933ed",
+      "name": "Overview",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        180,
-        40
+        144,
+        -528
       ]
     },
     {
       "parameters": {
+        "resource": "folder",
         "operation": "list",
-        "path": "/Shared/Shared/Pipeline/Translate/",
-        "options": {},
-        "resource": "folder"
+        "path": "/Shared/Shared/Pipeline/Translate/"
       },
       "type": "n8n-nodes-base.nextCloud",
       "typeVersion": 1,
       "position": [
-        440,
-        500
+        448,
+        496
       ],
-      "id": "YOUR_UUID",
+      "id": "b2ad6dc2-51fc-4030-8a21-ab4fc003400c",
       "name": "List Translate Files",
       "credentials": {
         "nextCloudApi": {
@@ -293,42 +301,221 @@
           "name": "YOUR_NEXT_CLOUD_API_CREDENTIAL"
         }
       },
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "notes": "Lists files in Pipeline/Inbox/Translate/ on NextCloud."
     },
     {
-      "id": "YOUR_UUID",
-      "name": "Queue Dedup Check",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.5,
-      "position": [
-        1560,
-        100
-      ],
       "parameters": {
         "operation": "executeQuery",
         "query": "={{ `SELECT id FROM pipeline_queue WHERE source_channel = 'nextcloud' AND status IN ('pending', 'processing') AND message_text LIKE '%${$json._fileName.replace(/'/g, \"''\")}%' LIMIT 1;` }}",
         "options": {}
       },
+      "id": "60d5ed3a-c8fc-4a2e-a998-574be19d8126",
+      "name": "Queue Dedup Check",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1744,
+        480
+      ],
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "YOUR_CREDENTIAL_ID",
           "name": "YOUR_POSTGRES_CREDENTIAL"
         }
       },
-      "alwaysOutputData": true
+      "notes": "Checks pipeline_queue for existing jobs with same content key."
     },
     {
-      "id": "YOUR_UUID",
+      "parameters": {
+        "jsCode": "// check for existing pending/processing job to prevent duplicates\n\nconst queueResult = $input.all();\nconst classifyData = $('Check Cache Result').first().json;\n\nconst hasPending = queueResult.length > 0 && queueResult[0].json.id;\n\nif (hasPending) {\n  // File already queued \u2014 skip entirely (don't download, don't re-queue)\n  return [];\n}\n\n// No pending job \u2014 continue to download\nreturn [{ json: classifyData }];"
+      },
+      "id": "4138246b-f742-4fa9-ad98-7130af981097",
       "name": "Has Pending Job?",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1710,
-        100
+        2000,
+        480
       ],
+      "notes": "Checks if a pending/processing job already exists for this file to prevent duplicates."
+    },
+    {
       "parameters": {
-        "jsCode": "// Check if a pending/processing job already exists for this file\nconst queueResult = $input.all();\nconst classifyData = $('Check Cache Result').first().json;\n\nconst hasPending = queueResult.length > 0 && queueResult[0].json.id;\n\nif (hasPending) {\n  // File already queued — skip entirely (don't download, don't re-queue)\n  return [];\n}\n\n// No pending job — continue to download\nreturn [{ json: classifyData }];"
-      }
+        "content": "## Credential\n**NextCloud**\nLists files in Pipeline/Inbox/.",
+        "height": 286,
+        "width": 260,
+        "color": 3
+      },
+      "id": "d8838a2d-ae66-4924-aeee-f844987b1451",
+      "name": "Credential: List Inbox Files",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        368,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n**NextCloud**\nDownloads file from Inbox for processing.",
+        "height": 302,
+        "width": 260,
+        "color": 3
+      },
+      "id": "31949b2d-cf50-457b-b386-ce4322e87c43",
+      "name": "Credential: Download File",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2176,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n**NextCloud**\nMoves queued file to Processed folder.",
+        "height": 302,
+        "width": 260,
+        "color": 3
+      },
+      "id": "d0a4a9e5-ae5b-4aa8-b858-42539ecc02e6",
+      "name": "Credential: Move to Processed",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2960,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n**NextCloud**\nMoves cached file to Processed folder.",
+        "height": 302,
+        "width": 260,
+        "color": 3
+      },
+      "id": "92ee2aab-b340-4599-a002-f2c8ad75b2c3",
+      "name": "Credential: Move Cached to Processed",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n**NextCloud**\nLists files in Pipeline/Inbox/Translate/.",
+        "height": 286,
+        "width": 260,
+        "color": 3
+      },
+      "id": "d0b41c8c-b530-415e-a4e1-d12b40dca8ec",
+      "name": "Credential: List Translate Files",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        368,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n**Postgres Signal**\nChecks content_cache for already-processed files.",
+        "height": 318,
+        "width": 260,
+        "color": 3
+      },
+      "id": "f47df77c-61e8-45dc-b6bb-3933e513c665",
+      "name": "Credential: Cache Check",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n**Postgres Signal**\nInserts NextCloud file job into pipeline_queue.",
+        "height": 302,
+        "width": 260,
+        "color": 3
+      },
+      "id": "359f1e87-52de-4d33-b3ae-40cb627f572e",
+      "name": "Credential: Queue Job",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2656,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Credential\n**Postgres Signal**\nChecks for existing jobs to prevent duplicates.",
+        "height": 302,
+        "width": 260,
+        "color": 3
+      },
+      "id": "549b1629-ba1f-4bfd-b584-5a8ec5702134",
+      "name": "Credential: Queue Dedup Check",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Ingestion\nPolls NextCloud inbox for new files. Classifies by type (books, audio, translate).",
+        "height": 832,
+        "width": 800,
+        "color": 7
+      },
+      "id": "ea8b8e33-96b7-433e-8947-341d9bc8246f",
+      "name": "Section: INGESTION",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        144,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Cache & Dedup\nChecks content_cache and pipeline_queue to skip already-processed or queued files.",
+        "height": 832,
+        "width": 1168,
+        "color": 7
+      },
+      "id": "bf8efdde-0d6f-4b53-ace7-a245dd020b17",
+      "name": "Section: CACHE & DEDUP",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        960,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Process & Queue\nDownloads file, computes content key, queues for Worker, moves to Processed.",
+        "height": 464,
+        "width": 1120,
+        "color": 7
+      },
+      "id": "7f9a6f63-d96c-4a37-894e-03b223f60edb",
+      "name": "Section: PROCESS & QUEUE",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        224
+      ]
     }
   ],
   "connections": {
@@ -492,560 +679,45 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "staticData": {
-    "node:Schedule Trigger": {
-      "recurrenceRules": []
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "activeVersionId": null,
+  "versionCounter": 123,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-03-08T10:23:11.015Z",
+      "createdAt": "2026-03-08T10:23:11.015Z",
+      "role": "workflow:owner",
+      "workflowId": "NYaMUkWLL36DliCR",
+      "projectId": "LvZfzuC4dHxTUyOL",
+      "project": {
+        "updatedAt": "2026-03-06T16:58:01.728Z",
+        "createdAt": "2026-03-06T16:57:45.333Z",
+        "id": "LvZfzuC4dHxTUyOL",
+        "name": "Dee Admin <dee@stmna.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "7676d3eb-8926-44ae-aa37-37241b98e3d4"
+      }
     }
-  },
-  "pinData": null,
-  "activeVersionId": "YOUR_UUID",
-  "versionCounter": 117,
-  "triggerCount": 1,
+  ],
   "tags": [],
-  "activeVersion": {
-    "updatedAt": "2026-02-24T11:47:53.582Z",
-    "createdAt": "2026-02-24T11:47:53.582Z",
-    "versionId": "YOUR_UUID",
-    "workflowId": "BtfUhCUA5zGrBXKQ",
-    "nodes": [
-      {
-        "parameters": {
-          "rule": {
-            "interval": [
-              {
-                "field": "seconds",
-                "secondsInterval": 60
-              }
-            ]
-          }
-        },
-        "id": "nc-trigger",
-        "name": "Schedule Trigger",
-        "type": "n8n-nodes-base.scheduleTrigger",
-        "typeVersion": 1.2,
-        "position": [
-          220,
-          300
-        ]
-      },
-      {
-        "parameters": {
-          "operation": "list",
-          "path": "/Shared/Shared/Pipeline/Inbox/",
-          "options": {},
-          "resource": "folder"
-        },
-        "id": "nc-list-files",
-        "name": "List Inbox Files",
-        "type": "n8n-nodes-base.nextCloud",
-        "typeVersion": 1,
-        "position": [
-          440,
-          300
-        ],
-        "credentials": {
-          "nextCloudApi": {
-            "id": "qUARugNESqj1pJ76",
-            "name": "NextCloud account"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "jsCode": "/**\n * CLASSIFY FILES — Filter and classify files from NextCloud listing\n * NextCloud folder:list returns items with: path, lastModified, contentLength, contentType, type\n * Each item has type=\"file\" or type=\"folder\".\n * Determines content_type from file extension AND parent folder.\n * Files in Translate/ folder → translate-book content type.\n * Skips directories, hidden files, and unsupported types.\n */\nconst items = $input.all();\nconst results = [];\n\nconst videoExts = ['mp4', 'mkv', 'webm', 'mov', 'avi'];\nconst audioExts = ['mp3', 'm4a', 'ogg', 'wav', 'opus', 'flac', 'aac'];\nconst bookExts = ['epub'];\n\nfor (const item of items) {\n  const data = item.json || {};\n  \n  // Skip empty results (when folder is empty, NextCloud returns {})\n  if (!data.path && !data.type) continue;\n  \n  // Skip folders — we only want files\n  if (data.type === 'folder') continue;\n  \n  const filePath = data.path || '';\n  if (!filePath) continue;\n  \n  // Extract filename from path\n  const parts = filePath.split('/').filter(Boolean);\n  const fileName = parts[parts.length - 1];\n  if (!fileName || fileName.startsWith('.') || fileName.startsWith('_')) continue;\n  \n  // Decode URL-encoded filenames\n  const decodedName = decodeURIComponent(fileName);\n  const ext = decodedName.split('.').pop().toLowerCase();\n  \n  // Detect which folder the file is in\n  const isTranslateFolder = filePath.toLowerCase().includes('/translate/');\n  \n  let contentType = null;\n  let flags = {};\n  \n  if (isTranslateFolder) {\n    // Translate folder: only accept book files (epub)\n    if (bookExts.includes(ext)) {\n      contentType = 'translate-book';\n      // Default to French translation (most content is English)\n      // Worker will auto-detect source language from EPUB metadata\n      flags = { translate: 'fr' };\n    }\n    // Skip non-book files in Translate folder\n    if (!contentType) continue;\n  } else {\n    // Inbox folder: standard classification\n    if (videoExts.includes(ext)) {\n      contentType = 'local-video';\n    } else if (audioExts.includes(ext)) {\n      contentType = 'local-audio';\n    } else if (bookExts.includes(ext)) {\n      contentType = 'local-book';\n    }\n  }\n  \n  // Skip unsupported file types\n  if (!contentType) continue;\n  \n  // Generate slug from filename\n  const slug = decodedName.toLowerCase()\n    .replace(/\\.[^.]+$/, '')\n    .replace(/[^a-z0-9\\s-]/g, '')\n    .replace(/\\s+/g, '-')\n    .substring(0, 60);\n  \n  // Build NextCloud path for download/move operations\n  const ncFolder = isTranslateFolder ? 'Translate' : 'Inbox';\n  \n  results.push({ json: {\n    _fileName: decodedName,\n    _ncPath: `/Shared/Shared/Pipeline/${ncFolder}/${decodedName}`,\n    _contentType: contentType,\n    _ext: ext,\n    _slug: slug || 'file',\n    _source: 'nextcloud',\n    _fileSize: parseInt(data.contentLength || '0', 10),\n    _flags: flags,\n    _ncFolder: ncFolder\n  }});\n}\n\n// If no processable files found, return empty marker\nif (results.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn results;\n"
-        },
-        "id": "nc-classify",
-        "name": "Classify Files",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          660,
-          300
-        ]
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "caseSensitive": true,
-              "leftValue": "",
-              "typeValidation": "strict"
-            },
-            "conditions": [
-              {
-                "id": "nc-empty-check",
-                "leftValue": "={{ $json._empty }}",
-                "rightValue": true,
-                "operator": {
-                  "type": "boolean",
-                  "operation": "notEquals"
-                }
-              }
-            ],
-            "combinator": "and"
-          }
-        },
-        "id": "nc-filter-empty",
-        "name": "Has Files?",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          880,
-          300
-        ]
-      },
-      {
-        "parameters": {
-          "operation": "executeQuery",
-          "query": "={{ `SELECT content_key FROM content_cache WHERE content_key LIKE 'file:%_${$json._slug}' AND content_type = '${$json._contentType}' LIMIT 1;` }}",
-          "options": {}
-        },
-        "id": "nc-cache-check",
-        "name": "Cache Check",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2.5,
-        "position": [
-          1100,
-          200
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "PctDF92gLPazUEUV",
-            "name": "Postgres Signal"
-          }
-        },
-        "alwaysOutputData": true
-      },
-      {
-        "parameters": {
-          "jsCode": "/**\n * CHECK CACHE RESULT — Determine if file was already processed OR already queued\n * Checks both content_cache (processed) and pipeline_queue (pending/processing).\n * Uses Code+IF pattern (not IF node alone) due to n8n IF v2.2 quirk.\n */\nconst cacheItems = $input.all();\nconst classifyData = $('Classify Files').first().json;\n\n// Check content_cache hit\nconst hasCache = cacheItems.length > 0 && cacheItems[0].json.content_key;\n\n// Also check if this file is already queued (pending/processing) in pipeline_queue\n// This prevents re-queuing during the processing window (which can be 60+ min for books)\nlet alreadyQueued = false;\nif (!hasCache) {\n  // We need the content key — but it's computed after download, which hasn't happened yet.\n  // Instead, check by filename: look for pending/processing jobs from nextcloud\n  // with this filename in their message_text metadata.\n  const fileName = classifyData._fileName || '';\n  if (fileName) {\n    try {\n      // This node receives PostgreSQL output from Cache Check.\n      // We can't run another query here, but we can use the _fileName\n      // to mark it for a downstream queue check.\n      // Actually, we'll use a simpler approach: check if the file was\n      // already seen by looking at a broader cache check in the query.\n    } catch(e) {}\n  }\n}\n\nreturn [{ json: {\n  ...classifyData,\n  _hasCache: !!hasCache,\n  _cachedKey: hasCache ? cacheItems[0].json.content_key : null\n} }];"
-        },
-        "id": "nc-check-cache",
-        "name": "Check Cache Result",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          1320,
-          200
-        ]
-      },
-      {
-        "parameters": {
-          "conditions": {
-            "options": {
-              "caseSensitive": true,
-              "leftValue": "",
-              "typeValidation": "strict"
-            },
-            "conditions": [
-              {
-                "id": "nc-has-cache",
-                "leftValue": "={{ $json._hasCache }}",
-                "rightValue": true,
-                "operator": {
-                  "type": "boolean",
-                  "operation": "equals"
-                }
-              }
-            ],
-            "combinator": "and"
-          }
-        },
-        "id": "nc-has-cache",
-        "name": "Has Cache?",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 2.2,
-        "position": [
-          1540,
-          200
-        ]
-      },
-      {
-        "parameters": {
-          "operation": "download",
-          "path": "={{ $json._ncPath }}",
-          "options": {}
-        },
-        "id": "nc-download",
-        "name": "Download File",
-        "type": "n8n-nodes-base.nextCloud",
-        "typeVersion": 1,
-        "position": [
-          1760,
-          100
-        ],
-        "credentials": {
-          "nextCloudApi": {
-            "id": "qUARugNESqj1pJ76",
-            "name": "NextCloud account"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "jsCode": "/**\n * SAVE FILE & COMPUTE KEY — Copy binary from n8n storage to /tmp, compute content key\n * n8n filesystem-v2 stores binary data in storage directory.\n * We copy it to /tmp/ for ffmpeg/whisper processing downstream.\n */\nconst fs = require('fs');\nconst { execFileSync } = require('child_process');\n\nconst classifyData = $('Check Cache Result').first().json;\nconst fileName = classifyData._fileName;\nconst stamp = String(Date.now()) + '_' + Math.random().toString(36).slice(2, 6);\n// Use persistent directory for files that need to survive across executions\nconst pipeDir = '/home/node/.n8n/pipeline-files';\ntry { const fs2 = require('fs'); if (!fs2.existsSync(pipeDir)) fs2.mkdirSync(pipeDir, {recursive: true}); } catch(e) {}\nconst localPath = `${pipeDir}/nc_${stamp}_${fileName}`;\n\n// Get binary data reference from Download File node\nconst binaryData = $input.first().binary;\nif (!binaryData || !binaryData.data) {\n  throw new Error('No binary data from NextCloud download');\n}\n\nconst binaryInfo = binaryData.data;\n\n// filesystem-v2: binary stored on disk, id contains the path\n// id format: \"filesystem-v2:workflows/<wfId>/executions/<exId>/binary_data/<uuid>\"\nif (binaryInfo.id && binaryInfo.id.startsWith('filesystem-v2:')) {\n  const storagePath = '/home/node/.n8n/storage/' + binaryInfo.id.replace('filesystem-v2:', '');\n  if (!fs.existsSync(storagePath)) {\n    throw new Error('Binary storage file not found: ' + storagePath);\n  }\n  fs.copyFileSync(storagePath, localPath);\n} else if (binaryInfo.data && binaryInfo.data.length > 100) {\n  // Legacy base64 mode (fallback)\n  const buffer = Buffer.from(binaryInfo.data, 'base64');\n  fs.writeFileSync(localPath, buffer);\n} else {\n  throw new Error('Cannot read binary data. id=' + (binaryInfo.id || 'none') + ', data_len=' + (binaryInfo.data || '').length);\n}\n\nconst fileSize = fs.statSync(localPath).size;\nif (fileSize < 1000) throw new Error('Downloaded file too small: ' + fileSize + ' bytes');\n\n// Compute content key hash using sha256sum CLI\nlet hashPrefix;\ntry {\n  const hashOut = execFileSync('sha256sum', [localPath], { encoding: 'utf-8', timeout: 60000 });\n  hashPrefix = hashOut.split(' ')[0].substring(0, 8);\n} catch(e) {\n  hashPrefix = String(fileSize).substring(0, 8).padStart(8, '0');\n}\n\nconst slug = classifyData._slug || 'file';\nconst contentKey = `file:${hashPrefix}_${slug}`;\n\nreturn [{ json: {\n  ...classifyData,\n  _filePath: localPath,\n  _fileSize: fileSize,\n  _contentKey: contentKey,\n  _tmpStamp: stamp\n} }];"
-        },
-        "id": "nc-save-compute",
-        "name": "Save File & Compute Key",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          1980,
-          100
-        ]
-      },
-      {
-        "parameters": {
-          "operation": "executeQuery",
-          "query": "={{ (() => {\n  const item = $json;\n  const url = '';\n  const ct = item._contentType || 'local-audio';\n  // Pass through flags from Classify Files (e.g., translate flag for Translate folder)\n  const classifyData = $('Check Cache Result').first().json;\n  const flagsObj = classifyData._flags || item._flags || {};\n  const flagsJson = JSON.stringify(flagsObj).replace(/'/g, \"''\");\n  const userId = 1; // Admin (Dee)\n  const src = 'nextcloud';\n  const meta = JSON.stringify({\n    filePath: item._filePath,\n    fileName: item._fileName,\n    contentKey: item._contentKey,\n    slug: item._slug,\n    fileSize: item._fileSize,\n    ncPath: item._ncPath,\n    ncFolder: item._ncFolder\n  }).replace(/'/g, \"''\");\n  return `INSERT INTO pipeline_queue (url, content_type, flags, sender, source_channel, message_text, priority, scheduled_after, status) VALUES ('${url}', '${ct}', '${flagsJson}', ${userId}, '${src}', '${meta}', 'immediate', NULL, 'pending') RETURNING id, priority;`;\n})() }}",
-          "options": {}
-        },
-        "id": "nc-queue-job",
-        "name": "Queue Job",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2.5,
-        "position": [
-          2200,
-          100
-        ],
-        "credentials": {
-          "postgres": {
-            "id": "PctDF92gLPazUEUV",
-            "name": "Postgres Signal"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "resource": "file",
-          "operation": "move",
-          "path": "={{ $('Check Cache Result').first().json._ncPath }}",
-          "toPath": "={{ `/Shared/Shared/Pipeline/Processed/${$('Check Cache Result').first().json._fileName}` }}",
-          "options": {}
-        },
-        "id": "nc-move-processed",
-        "name": "Move to Processed",
-        "type": "n8n-nodes-base.nextCloud",
-        "typeVersion": 1,
-        "position": [
-          2420,
-          100
-        ],
-        "credentials": {
-          "nextCloudApi": {
-            "id": "qUARugNESqj1pJ76",
-            "name": "NextCloud account"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "resource": "file",
-          "operation": "move",
-          "path": "={{ $json._ncPath }}",
-          "toPath": "={{ `/Shared/Shared/Pipeline/Processed/${$json._fileName}` }}",
-          "options": {}
-        },
-        "id": "nc-move-cached",
-        "name": "Move Cached to Processed",
-        "type": "n8n-nodes-base.nextCloud",
-        "typeVersion": 1,
-        "position": [
-          1760,
-          300
-        ],
-        "credentials": {
-          "nextCloudApi": {
-            "id": "qUARugNESqj1pJ76",
-            "name": "NextCloud account"
-          }
-        }
-      },
-      {
-        "parameters": {
-          "content": "## SIGNAL_NEXTCLOUD\nPhase 1E — NextCloud File Ingestion\n\nPolls Pipeline/inbox/ every 60s.\nClassifies by extension → queues for Worker.\nFiles moved to Pipeline/processed/ after queuing.",
-          "width": 400,
-          "height": 200
-        },
-        "id": "nc-sticky",
-        "name": "Section: NEXTCLOUD INGESTION",
-        "type": "n8n-nodes-base.stickyNote",
-        "typeVersion": 1,
-        "position": [
-          180,
-          40
-        ]
-      },
-      {
-        "parameters": {
-          "operation": "list",
-          "path": "/Shared/Shared/Pipeline/Translate/",
-          "options": {},
-          "resource": "folder"
-        },
-        "type": "n8n-nodes-base.nextCloud",
-        "typeVersion": 1,
-        "position": [
-          440,
-          500
-        ],
-        "id": "YOUR_UUID",
-        "name": "List Translate Files",
-        "credentials": {
-          "nextCloudApi": {
-            "id": "qUARugNESqj1pJ76",
-            "name": "NextCloud account"
-          }
-        },
-        "onError": "continueRegularOutput"
-      },
-      {
-        "id": "YOUR_UUID",
-        "name": "Queue Dedup Check",
-        "type": "n8n-nodes-base.postgres",
-        "typeVersion": 2.5,
-        "position": [
-          1560,
-          100
-        ],
-        "parameters": {
-          "operation": "executeQuery",
-          "query": "={{ `SELECT id FROM pipeline_queue WHERE source_channel = 'nextcloud' AND status IN ('pending', 'processing') AND message_text LIKE '%${$json._fileName.replace(/'/g, \"''\")}%' LIMIT 1;` }}",
-          "options": {}
-        },
-        "credentials": {
-          "postgres": {
-            "id": "PctDF92gLPazUEUV",
-            "name": "Postgres Signal"
-          }
-        },
-        "alwaysOutputData": true
-      },
-      {
-        "id": "YOUR_UUID",
-        "name": "Has Pending Job?",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          1710,
-          100
-        ],
-        "parameters": {
-          "jsCode": "// Check if a pending/processing job already exists for this file\nconst queueResult = $input.all();\nconst classifyData = $('Check Cache Result').first().json;\n\nconst hasPending = queueResult.length > 0 && queueResult[0].json.id;\n\nif (hasPending) {\n  // File already queued — skip entirely (don't download, don't re-queue)\n  return [];\n}\n\n// No pending job — continue to download\nreturn [{ json: classifyData }];"
-        }
-      }
-    ],
-    "connections": {
-      "Schedule Trigger": {
-        "main": [
-          [
-            {
-              "node": "List Inbox Files",
-              "type": "main",
-              "index": 0
-            },
-            {
-              "node": "List Translate Files",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "List Inbox Files": {
-        "main": [
-          [
-            {
-              "node": "Classify Files",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Classify Files": {
-        "main": [
-          [
-            {
-              "node": "Has Files?",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Has Files?": {
-        "main": [
-          [
-            {
-              "node": "Cache Check",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          []
-        ]
-      },
-      "Cache Check": {
-        "main": [
-          [
-            {
-              "node": "Check Cache Result",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Check Cache Result": {
-        "main": [
-          [
-            {
-              "node": "Has Cache?",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Has Cache?": {
-        "main": [
-          [
-            {
-              "node": "Move Cached to Processed",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Queue Dedup Check",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Download File": {
-        "main": [
-          [
-            {
-              "node": "Save File & Compute Key",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Queue Job": {
-        "main": [
-          [
-            {
-              "node": "Move to Processed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Save File & Compute Key": {
-        "main": [
-          [
-            {
-              "node": "Queue Job",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "List Translate Files": {
-        "main": [
-          [
-            {
-              "node": "Classify Files",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Queue Dedup Check": {
-        "main": [
-          [
-            {
-              "node": "Has Pending Job?",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Has Pending Job?": {
-        "main": [
-          [
-            {
-              "node": "Download File",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "authors": "n8n admin",
-    "name": null,
-    "description": null,
-    "autosaved": false,
-    "workflowPublishHistory": [
-      {
-        "createdAt": "2026-02-24T11:47:53.638Z",
-        "id": 417,
-        "workflowId": "BtfUhCUA5zGrBXKQ",
-        "versionId": "YOUR_UUID",
-        "event": "activated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-24T11:47:53.731Z",
-        "id": 419,
-        "workflowId": "BtfUhCUA5zGrBXKQ",
-        "versionId": "YOUR_UUID",
-        "event": "activated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-27T10:36:05.475Z",
-        "id": 555,
-        "workflowId": "BtfUhCUA5zGrBXKQ",
-        "versionId": "YOUR_UUID",
-        "event": "activated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-24T11:47:53.613Z",
-        "id": 416,
-        "workflowId": "BtfUhCUA5zGrBXKQ",
-        "versionId": "YOUR_UUID",
-        "event": "deactivated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-24T11:47:53.682Z",
-        "id": 418,
-        "workflowId": "BtfUhCUA5zGrBXKQ",
-        "versionId": "YOUR_UUID",
-        "event": "deactivated",
-        "userId": "YOUR_UUID"
-      },
-      {
-        "createdAt": "2026-02-27T10:36:05.451Z",
-        "id": 554,
-        "workflowId": "BtfUhCUA5zGrBXKQ",
-        "versionId": "YOUR_UUID",
-        "event": "deactivated",
-        "userId": "YOUR_UUID"
-      }
-    ]
-  }
+  "parentFolder": null,
+  "scopes": [
+    "workflow:create",
+    "workflow:delete",
+    "workflow:execute",
+    "workflow:execute-chat",
+    "workflow:list",
+    "workflow:move",
+    "workflow:publish",
+    "workflow:read",
+    "workflow:share",
+    "workflow:unpublish",
+    "workflow:update"
+  ],
+  "checksum": "9d767a28ae0f5ae6c3b100df90aa9f3df4457bd0fbda5ecba85b396cb876aad4"
 }
