@@ -102,6 +102,14 @@ The bottleneck is transcription, not summarization. Whisper large-v3-turbo on Vu
 
 ## Setup
 
+> Designed for and tested on [STMNA Desk](https://github.com/stmna-io/stmna-desk)
+> (AMD Ryzen AI Max+ 395, 128GB unified memory). Can be adapted to any Linux system
+> with the required services (n8n, whisper.cpp, llama.cpp, PostgreSQL).
+
+### Network Requirements
+
+STMNA Signal receives messages via webhooks, which require HTTPS endpoints reachable from the internet. If your server is behind a home network or firewall, you'll need a tunnel or reverse proxy. See [STMNA Desk: Remote Access](https://github.com/stmna-io/stmna-desk/blob/main/docs/remote-access.md) for options including Cloudflare Tunnels, Tailscale Funnel, and VPS-based reverse proxies.
+
 ### Prerequisites
 
 - [STMNA Desk](https://github.com/stmna-io/stmna-desk) running (or equivalent: AMD GPU with Vulkan, llama-swap or any OpenAI-compatible endpoint, whisper.cpp server, n8n with ffmpeg)
