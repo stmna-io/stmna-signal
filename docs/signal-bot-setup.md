@@ -1,6 +1,6 @@
 # Signal Bot Setup Guide
 
-<!-- TODO: Write full Signal bot setup guide for SB-07 session -->
+<!-- TODO: Write full Signal bot setup guide -->
 <!-- Content: signal-cli-rest-api deployment on VPS, phone number registration,
      linking secondary device, webhook configuration, n8n webhook URL setup,
      bearer token auth, testing with curl, common errors -->
@@ -33,4 +33,4 @@ This document will cover:
 - Device linking issues
 - Webhook not receiving messages
 
-Coming in SB-07 session.
+Coming soon.

@@ -1,4 +1,4 @@
-# STMNA Signal — Workflow Reference
+# STMNA Signal  -- Workflow Reference
 
 This directory contains the four n8n workflows that make up the STMNA Signal pipeline. They process content from Signal messages, webhooks, and NextCloud drops into structured Obsidian vault notes with optional translation and text-to-speech audio.
 
@@ -102,10 +102,10 @@ See the [docker/](../docker/) directory for a ready-to-use n8n Dockerfile.
 
 The pipeline uses a PostgreSQL database (`stmna_signal`) with four tables:
 
-- `pipeline_users` — registered Signal users and preferences
-- `pipeline_queue` — job queue with status tracking
-- `content_cache` — deduplicated content (Layer 1: extraction results)
-- `content_variants` — translated/transformed versions (Layer 2: transformation results)
+- `pipeline_users`  -- registered Signal users and preferences
+- `pipeline_queue`  -- job queue with status tracking
+- `content_cache`  -- deduplicated content (Layer 1: extraction results)
+- `content_variants`  -- translated/transformed versions (Layer 2: transformation results)
 
 ```bash
 psql -U postgres -d stmna_signal -f ../sql/schema.sql
@@ -117,10 +117,10 @@ psql -U postgres -d stmna_signal -f ../sql/schema.sql
 
 1. In n8n, go to **Settings > Import workflow**
 2. Import workflows **in this order** (dependencies flow downward):
-   1. `signal-cleanup.json` — no dependencies on other workflows
-   2. `signal-nextcloud.json` — writes to the same queue table as Ingestion
-   3. `signal-ingestion.json` — receives messages, queues work
-   4. `signal-worker.json` — reads from queue, calls all external services
+   1. `signal-cleanup.json`  -- no dependencies on other workflows
+   2. `signal-nextcloud.json`  -- writes to the same queue table as Ingestion
+   3. `signal-ingestion.json`  -- receives messages, queues work
+   4. `signal-worker.json`  -- reads from queue, calls all external services
 3. For each workflow, reassign credentials after import (see below)
 4. **Activate** in reverse order: Worker first, then Ingestion, then Cleanup
 

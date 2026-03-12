@@ -10,20 +10,20 @@ updated: 2026-03-05
 
 > By the end of this guide, you will have the STMNA Signal content pipeline running: send a YouTube URL or web link via Signal, get back a structured summary with optional translation and TTS audio.
 >
-> Tested on Ubuntu 24.04 LTS, deployed via Dockge on a staging VM (10.0.10.55) during SB-06.
+> Tested on Ubuntu 24.04 LTS, deployed via Dockge on a staging VM.
 
 ## Prerequisites
 
 | Requirement | Where to get it |
 |-------------|----------------|
-| STMNA Desk, Core + Automation tiers (Steps 1-8) | [Desk install guide](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md) |
-| STMNA Desk, Kokoro TTS (Step 10) -- for audio summaries | [Desk install guide, Step 10](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md#step-10-kokoro-tts-text-to-speech) |
-| STMNA Desk, Forgejo (Step 11) -- for vault git sync | [Desk install guide, Step 11](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md#step-11-forgejo-git-hosting) |
+| STMNA Desk, Core + Automation tiers (Steps 1-8) | [Desk install guide](https://github.com/stmna-io/stmna-desk/blob/main/docs/install-guide.md) |
+| STMNA Desk, Kokoro TTS (Step 10) -- for audio summaries | [Desk install guide, Step 10](https://github.com/stmna-io/stmna-desk/blob/main/docs/install-guide.md#step-10-kokoro-tts-text-to-speech) |
+| STMNA Desk, Forgejo (Step 11) -- for vault git sync | [Desk install guide, Step 11](https://github.com/stmna-io/stmna-desk/blob/main/docs/install-guide.md#step-11-forgejo-git-hosting) |
 | PostgreSQL running with `stmna_signal` database | Desk install guide, Step 4 |
 | n8n running with custom image | Desk install guide, Step 7 |
 | llama-swap running with at least one LLM | Desk install guide, Step 5 |
 | Whisper server running | Desk install guide, Step 8 |
-| Crawl4AI running -- for web article scraping | [Desk install guide, Step 13](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md#step-13-crawl4ai-web-scraping) |
+| Crawl4AI running -- for web article scraping | [Desk install guide, Step 13](https://github.com/stmna-io/stmna-desk/blob/main/docs/install-guide.md#step-13-crawl4ai-web-scraping) |
 | A Signal account on your phone | [signal.org](https://signal.org) |
 
 If installing on other infrastructure: see [Running on Other Infrastructure](#running-on-other-infrastructure) below.
@@ -128,7 +128,7 @@ services:
       - "8090:80"
     volumes:
       # NO ACTION NEEDED -- persistent data (files, config, database)
-      - /home/stmna/data/nextcloud:/var/www/html
+      - /home/YOUR_USER/data/nextcloud:/var/www/html
     environment:
       # USER INPUT REQUIRED -- admin credentials (set on first run only, ignored after)
       - NEXTCLOUD_ADMIN_USER=admin
@@ -152,7 +152,7 @@ networks:
 
 > **Required:** Set `NEXTCLOUD_ADMIN_PASSWORD` to a strong password. Generate one with `openssl rand -hex 16`.
 
-> **Required:** Set `NEXTCLOUD_TRUSTED_DOMAINS` to your server's IP or domain (e.g., `10.0.10.54 localhost`). NextCloud rejects requests from untrusted domains.
+> **Required:** Set `NEXTCLOUD_TRUSTED_DOMAINS` to your server's IP or domain (e.g., `192.168.1.100 localhost`). NextCloud rejects requests from untrusted domains.
 
 **Expected result:** NextCloud is accessible at `http://YOUR_IP:8090`. Log in with the admin credentials you set above.
 
@@ -431,5 +431,5 @@ This path is community-supported. The STMNA team validates against Desk only.
 ## What's Next
 
 - [Signal workflow architecture](../workflows/README.md) -- understand how the pipeline works
-- [Desk install guide](https://f.slowdawn.cc/stmna-io/stmna-desk/src/branch/main/docs/install-guide.md) -- full infrastructure setup
-- [Voice install guide](https://f.slowdawn.cc/stmna-io/stmna-voice/src/branch/main/docs/install-guide.md) -- add voice transcription
+- [Desk install guide](https://github.com/stmna-io/stmna-desk/blob/main/docs/install-guide.md) -- full infrastructure setup
+- [Voice install guide](https://github.com/stmna-io/stmna-voice/blob/main/docs/install-guide.md) -- add voice transcription

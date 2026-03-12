@@ -22,7 +22,7 @@
         240,
         192
       ],
-      "id": "b0b5c20d-e84a-4662-963f-3c173f3b57ab",
+      "id": "YOUR_UUID",
       "notes": "Triggers daily cleanup: cache purge, transcript cleanup, stats snapshot."
     },
     {
@@ -38,7 +38,7 @@
         464,
         192
       ],
-      "id": "a59bcff8-95ed-446a-b3b3-64a8a39ef58d",
+      "id": "YOUR_UUID",
       "credentials": {
         "postgres": {
           "id": "YOUR_CREDENTIAL_ID",
@@ -58,7 +58,7 @@
         736,
         192
       ],
-      "id": "917e7f38-f31a-41fb-b30f-0ca7b84e5548",
+      "id": "YOUR_UUID",
       "notes": "Deletes temp files: transcripts, NC downloads, extracted audio. Runs at 5 AM."
     },
     {
@@ -74,7 +74,7 @@
         1008,
         192
       ],
-      "id": "7a24baca-30f9-443b-90a5-4216812c7fca",
+      "id": "YOUR_UUID",
       "credentials": {
         "postgres": {
           "id": "YOUR_CREDENTIAL_ID",
@@ -100,7 +100,7 @@
         240,
         672
       ],
-      "id": "00d3fdbc-036f-4c5b-9463-103c1868d7ca",
+      "id": "YOUR_UUID",
       "notes": "Triggers deferred response delivery at 8 AM."
     },
     {
@@ -116,7 +116,7 @@
         464,
         672
       ],
-      "id": "303e7b58-fbf6-40e1-b231-2755908b9b61",
+      "id": "YOUR_UUID",
       "alwaysOutputData": true,
       "credentials": {
         "postgres": {
@@ -137,7 +137,7 @@
         768,
         672
       ],
-      "id": "47c99710-1817-4b49-a3a9-760d811a0ceb",
+      "id": "YOUR_UUID",
       "notes": "Delivers saved responses via Signal API at 8 AM. Iterates all pending."
     },
     {
@@ -153,7 +153,7 @@
         1056,
         672
       ],
-      "id": "507c9e4c-a177-46e3-b1ac-0d34dff7e3d0",
+      "id": "YOUR_UUID",
       "credentials": {
         "postgres": {
           "id": "YOUR_CREDENTIAL_ID",
@@ -169,7 +169,7 @@
         "width": 260,
         "color": 3
       },
-      "id": "03b27775-7fb9-48ac-bd46-1711e6b92424",
+      "id": "YOUR_UUID",
       "name": "Credential: Purge Expired Cache",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -185,7 +185,7 @@
         "width": 260,
         "color": 3
       },
-      "id": "e85be6aa-6b48-4e09-a0bb-1b0d280d50d5",
+      "id": "YOUR_UUID",
       "name": "Credential: Stats",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -201,7 +201,7 @@
         "width": 260,
         "color": 3
       },
-      "id": "f969cbdf-b0b9-4420-ae78-b780eaa0dcd1",
+      "id": "YOUR_UUID",
       "name": "Credential: Fetch Pending Responses",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -217,7 +217,7 @@
         "width": 260,
         "color": 3
       },
-      "id": "a10213de-d473-46cf-b206-57e058aff06a",
+      "id": "YOUR_UUID",
       "name": "Credential: Mark Responses Sent",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -228,12 +228,12 @@
     },
     {
       "parameters": {
-        "content": "## Config\n**Signal REST API**\n`YOUR_HOST_IP:8082` \u2014 must replace with your signal-cli-rest-api endpoint.\n**Signal Number**\n`YOUR_PHONE_NUMBER` \u2014 your Signal sender number.",
+        "content": "## Config\n**Signal REST API**\n`YOUR_HOST_IP:8082` -- must replace with your signal-cli-rest-api endpoint.\n**Signal Number**\n`YOUR_PHONE_NUMBER` -- your Signal sender number.",
         "height": 350,
         "width": 308,
         "color": 3
       },
-      "id": "cf90946b-bcf3-49b5-b586-a545fe0e5ecd",
+      "id": "YOUR_UUID",
       "name": "Config: Send Deferred Msgs",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -256,7 +256,7 @@
         -560,
         16
       ],
-      "id": "823459f4-9ee7-4868-a3e9-58c2989850dc"
+      "id": "YOUR_UUID"
     },
     {
       "parameters": {
@@ -272,7 +272,7 @@
         176,
         416
       ],
-      "id": "18ad434b-51d2-499a-b63e-01ab1dec4c74"
+      "id": "YOUR_UUID"
     },
     {
       "parameters": {
@@ -288,7 +288,7 @@
         176,
         -48
       ],
-      "id": "d81afb6f-d799-4499-808e-c8659a42d975"
+      "id": "YOUR_UUID"
     }
   ],
   "connections": {
@@ -363,44 +363,11 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "meta": null,
   "pinData": {},
   "activeVersionId": null,
   "versionCounter": 93,
   "triggerCount": 0,
-  "shared": [
-    {
-      "updatedAt": "2026-03-08T10:23:10.987Z",
-      "createdAt": "2026-03-08T10:23:10.987Z",
-      "role": "workflow:owner",
-      "workflowId": "MO2YDCpDksuDvax4",
-      "projectId": "LvZfzuC4dHxTUyOL",
-      "project": {
-        "updatedAt": "2026-03-06T16:58:01.728Z",
-        "createdAt": "2026-03-06T16:57:45.333Z",
-        "id": "LvZfzuC4dHxTUyOL",
-        "name": "Dee Admin <dee@stmna.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "creatorId": "7676d3eb-8926-44ae-aa37-37241b98e3d4"
-      }
-    }
-  ],
   "tags": [],
   "parentFolder": null,
-  "scopes": [
-    "workflow:create",
-    "workflow:delete",
-    "workflow:execute",
-    "workflow:execute-chat",
-    "workflow:list",
-    "workflow:move",
-    "workflow:publish",
-    "workflow:read",
-    "workflow:share",
-    "workflow:unpublish",
-    "workflow:update"
-  ],
   "checksum": "f6d4222f9e0c5ca1681824ef811eb84bf8436cf3d2deb06e1b9e31cce208f945"
 }

@@ -1,6 +1,6 @@
 # Forgejo + Obsidian Sync
 
-<!-- TODO: Write full Forgejo/Obsidian sync guide for SB-07 session -->
+<!-- TODO: Write full Forgejo/Obsidian sync guide -->
 <!-- Content: how processed Signal notes land in git repo on Forgejo,
      Obsidian Git plugin config for auto-pull, vault structure (30-SIGNALS/ folder),
      note format (YAML frontmatter, tags, content structure),
@@ -35,4 +35,4 @@ This document will cover:
 - User-specific vault branches or subdirectories
 - Shared pipeline, isolated outputs
 
-Coming in SB-07 session.
+Coming soon.
